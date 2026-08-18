@@ -105,10 +105,21 @@ The hitbox sits **12 px above** the sprite: the player dies to empty space above
 spike and passes through its visible lower half. In a game whose whole premise is precise
 gap-threading, that is the difference between hard and broken.
 
-Related: `drawSpike` builds a triangle with a *horizontal* 30 px base and a *vertical*
-24 px apex offset — an up/down-pointing spike. These are **wall** spikes; the base should
-run vertically along the wall face with the apex protruding horizontally into the play
-area. As drawn they read as flat chevrons stuck to the wall.
+Related, and just as visible: `drawSpike` builds a triangle with a *horizontal* 30 px base
+and a *vertical* 24 px apex offset — an up/down-pointing spike. These are **wall** spikes,
+so the triangle is rotated 90 degrees from where it should be. The base must run vertically
+along the wall face with the apex protruding horizontally into the play area:
+
+- **left-wall spikes point right** (base at `x = 12`, apex at `x = 36`)
+- **right-wall spikes point left** (base at `x = 528`, apex at `x = 504`)
+
+As drawn they read as flat chevrons lying against the wall rather than as threats
+projecting into the flight path. Note this also swaps the meaning of the two size
+constants: `SPIKE_WIDTH` is the extent *along* the wall and `SPIKE_HEIGHT` the protrusion
+*away* from it.
+
+The ceiling and floor rows from finding #5 are the opposite case and do keep a horizontal
+base — down-pointing on the ceiling, up-pointing on the floor.
 
 Because the triangle tapers, a fair test is cheap:
 

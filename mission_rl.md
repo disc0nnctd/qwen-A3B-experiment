@@ -19,12 +19,49 @@ Read it and fix all of them before building anything new. Tuning physics on top 
 gravity constant that is wrong by a factor of 60, or training an agent against hitboxes
 that do not match the sprites, will produce meaningless results.
 
-The two that block everything downstream:
+The three that block everything downstream:
 
 - `GRAVITY` must be `1620`, not `27`. An acceleration given in `px/frame^2` converts to
   `px/s^2` by multiplying by `fps^2`, not by `fps`.
+- **Wall spikes must point horizontally inward** — see 0.1 below. They are currently drawn
+  as upward/downward triangles, which is wrong for a spike mounted on a vertical wall.
 - Spike collision bounds must be derived from the same numbers `drawSpike` uses, so the
   hitbox and the sprite are the same shape.
+
+### 0.1 Spike orientation — required geometry
+
+The current `drawSpike` builds a triangle with a **horizontal** base spanning
+`x ± spikeWidth/2` and its apex displaced in **y**. That produces an up- or down-pointing
+spike. Wall spikes must be rotated 90 degrees from this: the base runs **vertically along
+the wall face**, and the apex protrudes **horizontally into the play area**.
+
+- **Left wall** spikes point **right** (`dir = +1`).
+- **Right wall** spikes point **left** (`dir = -1`).
+
+```js
+// Wall spike: vertical base flush against the wall face, apex pointing inward.
+// dir = +1 for the left wall (points right), -1 for the right wall (points left).
+function drawWallSpike(faceX, y, dir) {
+  ctx.beginPath();
+  ctx.moveTo(faceX, y - config.spikeWidth / 2);   // base, top
+  ctx.lineTo(faceX, y + config.spikeWidth / 2);   // base, bottom
+  ctx.lineTo(faceX + dir * config.spikeHeight, y); // apex, inward
+  ctx.closePath();
+  ctx.fill();
+}
+```
+
+With the defaults this puts left-wall spikes at base `x = 12`, apex `x = 36`, and
+right-wall spikes at base `x = 528`, apex `x = 504`. `spikeWidth` is therefore the extent
+**along** the wall and `spikeHeight` the protrusion **away** from it — check that both
+sliders still read correctly after the rotation.
+
+The ceiling and floor rows required by `REVIEW.md` §5 are the opposite case and *do* use a
+horizontal base: ceiling spikes point **down** (apex at `y = spikeHeight`), floor spikes
+point **up** (apex at `y = 960 - spikeHeight`). Implement them as a separate
+`drawCapSpike(x, faceY, dir)` rather than overloading one function with an axis flag —
+the two have different collision logic anyway, since the caps are lethal on contact while
+wall spikes need the tapered test.
 
 Do not begin Phase 1 until the game is playable by a human and the jump arc is roughly
 80 px tall — that is the spec-literal value and confirms the conversion is right. Phase 1
@@ -128,9 +165,9 @@ difficulty.
 
 ### 1.4 Spike angle
 
-Spikes are currently symmetric triangles whose apex points straight into the play area.
-Add `spikeAngle` (degrees, -45 to +45) which slides the apex **along the wall** while the
-base stays fixed:
+After Phase 0.1 the wall spikes are symmetric triangles whose apex points straight inward.
+Add `spikeAngle` (degrees, -45 to +45) which slides that apex **along the wall** while the
+vertical base stays flush against the wall face:
 
 ```js
 apexX = wallFaceX + dir * spikeHeight;
