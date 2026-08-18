@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Don't Touch The Spikes</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+canvas { max-width: 100%; max-height: 100vh; object-fit: contain; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<canvas id="game" width="540" height="960"></canvas>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 540, H = 960;
+const BIRD_R = 16;
+const GRAVITY = 0.45;
+const FLAP = -8.5;
+const VX = 4.5;
+const SLOT_H = H / 11;
+const SPIKE_W = 30, SPIKE_H = 24;
+const SAFE_TOP = SLOT_H;
+const SAFE_BOT = H - SLOT_H;
+const WALL_SPIKE_OFFSET = 12;
+const CANDY_R = 12;
+
+// Colors
+const BIRD_COLOR = '#ff6b35';
+const SPIKE_COLOR = '#e74c3c';
+const SPIKE_CEILING_COLOR = '#c0392b';
+const CANDY_COLOR = '#f1c40f';
+const WALL_COLOR = '#95a5a6';
+const FLOOR_COLOR = '#7f8c8d';
+
+// Game State
+const START_MENU = 0, GAMEPLAY = 1, GAME_OVER = 2;
+let state = START_MENU;
+let score = 0;
+let highScore = parseInt(localStorage.getItem('dqts_highscore')) || 0;
+let candyCount = parseInt(localStorage.getItem('dqts_candies')) || 0;
+let screenShake = { x: 0, y: 0, frames: 0 };
+let gameOverAnim = { active: false, time: 0, birdY: 0, birdAngle: 0 };
+
+// Particles
+let particles = [];
+
+// Bird
+let bird = { x: W / 2, y: H / 2, vx: VX, vy: 0 };
+
+// Walls
+let wallASpikes = []; // spikes on right wall
+let wallBSpikes = []; // spikes on left wall
+let wallAActive = true; // true = wall B (left) is active (has spikes)
+let wallB = []; // left wall spikes
+let wallA = []; // right wall spikes
+
+// Candy
+let candy = null;
+
+// Timing
+let lastTime = 0;
+let gameTime = 0;
+let startRealTime = Date.now();
+
+function initGame() {
+  bird = { x: W / 2, y: H / 2, vx: VX, vy: 0 };
+  score = 0;
+  screenShake = { x: 0, y: 0, frames: 0 };
+  gameOverAnim = { active: false, time: 0, birdY: H / 2, birdAngle: 0 };
+  particles = [];
+  candy = null;
+  wallA = [];
+  wallB = [];
+  wallAActive = true;
+  initWalls();
+}
+
+function initWalls() {
+  wallA = [];
+  wallB = [];
+  // Wall A (right wall) starts safe, Wall B (left wall) has spikes
+  wallAActive = true;
+  spawnSpikeWall(wallB, W - WALL_SPIKE_OFFSET); // left wall spikes
+}
+
+function spawnSpikeWall(wallSpikes, x) {
+  wallSpikes = [];
+  const difficulty = score <= 5 ? [2, 3] : score <= 15 ? [3, 4] : [4, 5];
+  const count = difficulty[0] + Math.floor(Math.random() * (difficulty[1] - difficulty[0] + 1));
+  const availableSlots = [];
+  for (let i = 1; i < 10; i++) {
+    const slotY = i * SLOT_H;
+    // Check if there's already a spike nearby
+    const alreadyHas = wallSpikes.some(s => {
+      const slot = Math.floor(s.y / SLOT_H);
+      return slot === i;
+    });
+    if (!alreadyHas) availableSlots.push(i);
+  }
+  const shuffled = availableSlots.sort(() => Math.random() - 0.5);
+  for (let i = 0; i < Math.min(count, shuffled.length); i++) {
+    const slot = shuffled[i];
+    const slotY = slot * SLOT_H + SLOT_H / 2;
+    wallSpikes.push({ x: x, y: slotY, wallSide: x >= W / 2 ? 'right' : 'left' });
+  }
+  return wallSpikes;
+}
+
+function spawnCandy() {
+  if (candy) return;
+  if (Math.random() > 0.5) return;
+  const activeWall = wallAActive ? wallA : wallB;
+  const activeX = wallAActive ? W - WALL_SPIKE_OFFSET : WALL_SPIKE_OFFSET;
+  const safeSlots = [];
+  for (let i = 1; i < 10; i++) {
+    const slotY = i * SLOT_H + SLOT_H / 2;
+    const hasSpike = activeWall.some(s => {
+      const slot = Math.floor(s.y / SLOT_H);
+      return slot === i;
+    });
+    if (!hasSpike) safeSlots.push(slotY);
+  }
+  if (safeSlots.length === 0) return;
+  const y = safeSlots[Math.floor(Math.random() * safeSlots.length)];
+  candy = { x: activeX + (wallAActive ? -40 : 40), y: y, angle: 0 };
+}
+
+function addParticles(x, y, color, count, type) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = type === 'candy' ? 1.5 + Math.random() * 2 : 2 + Math.random() * 3;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: type === 'candy' ? -Math.random() * 3 - 1 : Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.02 + Math.random() * 0.02,
+      size: type === 'candy' ? 3 + Math.random() * 3 : 4 + Math.random() * 4,
+      color: color,
+      type: type
+    });
+  }
+}
+
+function shakeScreen() {
+  screenShake = { x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 10, frames: 8 };
+}
+
+function flap() {
+  if (state === START_MENU) {
+    state = GAMEPLAY;
+    initGame();
+    return;
+  }
+  if (state === GAME_OVER) {
+    state = GAMEPLAY;
+    initGame();
+    return;
+  }
+  if (state !== GAMEPLAY) return;
+  bird.vy = FLAP;
+  addParticles(bird.x, bird.y + BIRD_R, WALL_COLOR, 6, 'wall');
+}
+
+// Input
+document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); flap(); } });
+canvas.addEventListener('click', flap);
+canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); });
+
+function checkSpikeCollision() {
+  for (let i = 0; i < wallA.length; i++) {
+    const s = wallA[i];
+    if (bird.x + BIRD_R > s.x - SPIKE_W / 2 && bird.x - BIRD_R < s.x + SPIKE_W / 2 &&
+        bird.y + BIRD_R > s.y - SPIKE_H && bird.y - BIRD_R < s.y) {
+      return true;
+    }
+  }
+  for (let i = 0; i < wallB.length; i++) {
+    const s = wallB[i];
+    if (bird.x + BIRD_R > s.x - SPIKE_W / 2 && bird.x - BIRD_R < s.x + SPIKE_W / 2 &&
+        bird.y + BIRD_R > s.y - SPIKE_H && bird.y - BIRD_R < s.y) {
+      return true;
+    }
+  }
+  // Ceiling spikes (from right wall side)
+  for (let i = 0; i < wallA.length; i++) {
+    const s = wallA[i];
+    if (bird.x + BIRD_R > s.x - SPIKE_W / 2 && bird.x - BIRD_R < s.x + SPIKE_W / 2 &&
+        bird.y + BIRD_R > 0 && bird.y - BIRD_R < SPIKE_H) {
+      return true;
+    }
+  }
+  // Floor spikes (from left wall side)
+  for (let i = 0; i < wallB.length; i++) {
+    const s = wallB[i];
+    if (bird.x + BIRD_R > s.x - SPIKE_W / 2 && bird.x - BIRD_R < s.x + SPIKE_W / 2 &&
+        bird.y + BIRD_R > H - SPIKE_H && bird.y - BIRD_R < H) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function checkCandyCollection() {
+  if (!candy) return;
+  const dx = bird.x - candy.x, dy = bird.y - candy.y;
+  if (Math.sqrt(dx * dx + dy * dy) < BIRD_R + CANDY_R) {
+    candyCount++;
+    localStorage.setItem('dqts_candies', candyCount);
+    addParticles(candy.x, candy.y, CANDY_COLOR, 10, 'candy');
+    candy = null;
+  }
+}
+
+function checkWallCollision() {
+  if (bird.x + BIRD_R > W - WALL_SPIKE_OFFSET) {
+    bird.x = W - WALL_SPIKE_OFFSET - BIRD_R;
+    bird.vx = -VX;
+    shakeScreen();
+    addParticles(bird.x + BIRD_R, bird.y, WALL_COLOR, 6, 'wall');
+    // Regenerate
+    if (wallAActive) {
+      wallAActive = false;
+      wallA = spawnSpikeWall([], WALL_SPIKE_OFFSET + WALL_SPIKE_OFFSET);
+    } else {
+      wallAActive = true;
+      wallA = spawnSpikeWall([], W - WALL_SPIKE_OFFSET);
+    }
+    score++;
+    spawnCandy();
+  }
+  if (bird.x - BIRD_R < WALL_SPIKE_OFFSET) {
+    bird.x = WALL_SPIKE_OFFSET + BIRD_R;
+    bird.vx = VX;
+    shakeScreen();
+    addParticles(bird.x - BIRD_R, bird.y, WALL_COLOR, 6, 'wall');
+    if (wallAActive) {
+      wallAActive = false;
+      wallA = spawnSpikeWall([], WALL_SPIKE_OFFSET + WALL_SPIKE_OFFSET);
+    } else {
+      wallAActive = true;
+      wallA = spawnSpikeWall([], W - WALL_SPIKE_OFFSET);
+    }
+    score++;
+    spawnCandy();
+  }
+  // Ceiling collision
+  if (bird.y - BIRD_R < SPIKE_H) {
+    bird.y = SPIKE_H + BIRD_R;
+    bird.vy = Math.abs(bird.vy) * 0.5;
+  }
+  // Floor collision
+  if (bird.y + BIRD_R > H - SPIKE_H) {
+    bird.y = H - SPIKE_H - BIRD_R;
+    bird.vy = -Math.abs(bird.vy) * 0.5;
+  }
+}
+
+function gameOver() {
+  state = GAME_OVER;
+  gameOverAnim = { active: true, time: 0, birdY: bird.y, birdAngle: 0 };
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('dqts_highscore', highScore);
+  }
+}
+
+function update(dt) {
+  if (state === START_MENU) {
+    bird.y = H / 2 + Math.sin(gameTime * 2) * 15;
+    return;
+  }
+  if (state === GAME_OVER) {
+    gameOverAnim.time += dt;
+    if (gameOverAnim.time < 0.5) {
+      gameOverAnim.birdAngle += 10 * dt;
+    } else {
+      gameOverAnim.birdY += 8 * dt;
+    }
+    return;
+  }
+  // Apply gravity
+  bird.vy += GRAVITY;
+  bird.x += bird.vx;
+  bird.y += bird.vy;
+  checkWallCollision();
+  if (checkSpikeCollision()) {
+    gameOver();
+    return;
+  }
+  checkCandyCollection();
+  // Update particles
+  particles = particles.filter(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.type === 'candy') p.vy -= 0.05;
+    p.life -= p.decay;
+    return p.life > 0;
+  });
+  // Update screen shake
+  if (screenShake.frames > 0) {
+    screenShake.frames--;
+    if (screenShake.frames <= 0) {
+      screenShake = { x: 0, y: 0, frames: 0 };
+    }
+  }
+  // Update candy rotation
+  if (candy) candy.angle += 0.03;
+  gameTime += dt;
+}
+
+function drawSpike(x, y, dir) {
+  ctx.fillStyle = SPIKE_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(x - SPIKE_W / 2, y + dir * SPIKE_H / 2);
+  ctx.lineTo(x + SPIKE_W / 2, y + dir * SPIKE_H / 2);
+  ctx.lineTo(x, y - dir * SPIKE_H / 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBird(x, y, vx) {
+  const dir = vx > 0 ? 1 : -1;
+  // Body
+  ctx.fillStyle = BIRD_COLOR;
+  ctx.beginPath();
+  ctx.arc(x, y, BIRD_R, 0, Math.PI * 2);
+  ctx.fill();
+  // Eye
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x + dir * 5, y - 4, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(x + dir * 7, y - 4, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Beak
+  ctx.fillStyle = '#f39c12';
+  ctx.beginPath();
+  ctx.moveTo(x + dir * 16, y - 1);
+  ctx.lineTo(x + dir * 24, y + 2);
+  ctx.lineTo(x + dir * 16, y + 5);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCandy(x, y, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.fillStyle = CANDY_COLOR;
+  ctx.beginPath();
+  ctx.moveTo(0, -CANDY_R);
+  ctx.lineTo(CANDY_R, 0);
+  ctx.lineTo(0, CANDY_R);
+  ctx.lineTo(-CANDY_R, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function draw() {
+  // Screen shake
+  ctx.save();
+  if (screenShake.frames > 0) {
+    ctx.translate(screenShake.x, screenShake.y);
+  }
+  // Background
+  ctx.fillStyle = '#ecef1';
+  ctx.fillRect(-10, -10, W + 20, H + 20);
+  // Background score text
+  if (state === GAMEPLAY) {
+    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    ctx.font = 'bold 180px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(score, W / 2, H / 2);
+  }
+  // Ceiling spikes
+  const ceilingSpikes = wallAActive ? wallA : wallB;
+  for (let i = 0; i < ceilingSpikes.length; i++) {
+    const s = ceilingSpikes[i];
+    drawSpike(s.x, SPIKE_H / 2, -1);
+  }
+  // Floor spikes
+  const floorSpikes = wallAActive ? wallB : wallA;
+  for (let i = 0; i < floorSpikes.length; i++) {
+    const s = floorSpikes[i];
+    drawSpike(s.x, H - SPIKE_H / 2, 1);
+  }
+  // Wall lines
+  ctx.strokeStyle = WALL_COLOR;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(WALL_SPIKE_OFFSET, 0);
+  ctx.lineTo(WALL_SPIKE_OFFSET, H);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(W - WALL_SPIKE_OFFSET, 0);
+  ctx.lineTo(W - WALL_SPIKE_OFFSET, H);
+  ctx.stroke();
+  // Wall spikes
+  const rightWallSpikes = wallAActive ? wallA : wallB;
+  const leftWallSpikes = wallAActive ? wallB : wallA;
+  for (let i = 0; i < rightWallSpikes.length; i++) {
+    const s = rightWallSpikes[i];
+    drawSpike(s.x, s.y, wallAActive ? -1 : 1);
+  }
+  for (let i = 0; i < leftWallSpikes.length; i++) {
+    const s = leftWallSpikes[i];
+    drawSpike(s.x, s.y, wallAActive ? 1 : -1);
+  }
+  // Candy
+  if (candy) drawCandy(candy.x, candy.y, candy.angle);
+  // Particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    if (p.type === 'candy') {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+    }
+  }
+  ctx.globalAlpha = 1;
+  // Bird
+  if (state === GAME_OVER) {
+    ctx.save();
+    ctx.translate(W / 2, gameOverAnim.birdY);
+    ctx.rotate(gameOverAnim.birdAngle);
+    drawBird(0, 0, 1);
+    ctx.restore();
+  } else if (state === START_MENU) {
+    drawBird(bird.x, bird.y, bird.vx);
+  } else {
+    drawBird(bird.x, bird.y, bird.vx);
+  }
+  // Start menu
+  if (state === START_MENU) {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 48px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("DON'T TOUCH", W / 2, H / 2 - 80);
+    ctx.fillText("THE SPIKES", W / 2, H / 2 - 30);
+    ctx.font = 'bold 36px Arial';
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillText("HIGH: " + highScore, W / 2, H / 2 + 30);
+    ctx.font = '24px Arial';
+    ctx.fillStyle = '#fff';
+    const pulse = Math.sin(gameTime * 3) * 0.3 + 0.7;
+    ctx.globalAlpha = pulse;
+    ctx.fillText("Tap to Jump", W / 2, H / 2 + 90);
+    ctx.globalAlpha = 1;
+  }
+  // Game over
+  if (state === GAME_OVER) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, W, H);
+    // Card
+    const cardW = 340, cardH = 260;
+    const cardX = W / 2 - cardW / 2, cardY = H / 2 - cardH / 2;
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, 16);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 36px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("GAME OVER", W / 2, cardY + 50);
+    ctx.font = '28px Arial';
+    ctx.fillStyle = '#e74c3c';
+    ctx.fillText("Score: " + score, W / 2, cardY + 100);
+    ctx.font = '22px Arial';
+    ctx.fillStyle = '#2c3e50';
+    ctx.fillText("Best: " + highScore, W / 2, cardY + 140);
+    ctx.fillText("Candies: " + candyCount, W / 2, cardY + 175);
+    // Play again button
+    const btnW = 200, btnH = 45;
+    const btnX = W / 2 - btnW / 2, btnY = cardY + cardH - 60;
+    const hover = Math.sin(gameTime * 4) * 2;
+    ctx.fillStyle = '#27ae60';
+    ctx.beginPath();
+    ctx.roundRect(btnX, btnY + hover, btnW, btnH, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText("Play Again", W / 2, btnY + btnH / 2 + hover);
+  }
+  ctx.restore();
+}
+
+let lastUpdate = 0;
+function gameLoop(timestamp) {
+  if (!lastUpdate) lastUpdate = timestamp;
+  const dt = Math.min((timestamp - lastUpdate) / 1000, 0.05);
+  lastUpdate = timestamp;
+  gameTime += dt;
+  update(dt);
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+initGame();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
