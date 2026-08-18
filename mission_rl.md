@@ -42,17 +42,75 @@ every consumer read from it at use time so changes apply live without a reload:
 const PHYSICS_DEFAULTS = {
   gravity:      1620,   // px/s^2
   flapVelocity: -510,   // px/s, absolute reset (not additive)
+  maxFallSpeed:  600,   // px/s, terminal velocity — see 1.2, this one matters
   horizontalSpeed: 270, // px/s
+  jumpStyle: 'instant', // 'instant' | 'impulse' — see 1.3
+  impulseFrames:   9,   // only used when jumpStyle === 'impulse'
   birdRadius:    16,    // px
   spikeWidth:    30,    // px, base of the triangle along the wall
   spikeHeight:   24,    // px, protrusion into the play area
+  spikeAngle:     0,    // degrees, apex tilt along the wall — see 1.4
   spikeCountMin:  2,
   spikeCountMax:  5,
   candyChance:  0.5,    // 0..1
 };
 ```
 
-### 1.2 Panel UI
+### 1.2 Terminal velocity — the highest-value addition
+
+Clamp downward velocity every step:
+
+```js
+bird.vy = Math.min(bird.vy + gravity * dt, maxFallSpeed);
+```
+
+Without a cap, a fall from the ceiling to the floor at `gravity = 1620` reaches
+`sqrt(2 * 1620 * 900) = 1708 px/s` — the bird crosses 1.8 screen-heights per second and
+becomes unrecoverable long before the player can react. Every game in this genre caps fall
+speed; the arc is parabolic on the way up and effectively linear once the cap is hit, which
+is what makes a long fall readable rather than a stone drop.
+
+This single parameter is the difference between "floaty and unfair" and "tight". Treat it
+as a first-class control, not an afterthought.
+
+### 1.3 Jump style
+
+Two selectable models, because they feel materially different:
+
+- **`instant`** — `vy = flapVelocity` in one step. Snappy, perfectly consistent, and what
+  the current brief specifies.
+- **`impulse`** — apply an upward velocity spread over `impulseFrames` steps, during which
+  gravity still applies. Produces a short powered *rise* rather than an instantaneous
+  velocity swap, and reads as a visible wing-beat. A new flap cancels and restarts the
+  impulse rather than stacking.
+
+Under `impulse`, derive the per-step velocity so that total rise matches the `instant`
+model's `flapVelocity^2 / (2 * gravity)`, so switching modes does not silently change the
+difficulty.
+
+### 1.4 Spike angle
+
+Spikes are currently symmetric triangles whose apex points straight into the play area.
+Add `spikeAngle` (degrees, -45 to +45) which slides the apex **along the wall** while the
+base stays fixed:
+
+```js
+apexX = wallFaceX + dir * spikeHeight;
+apexY = s.y + Math.tan(spikeAngle * Math.PI / 180) * spikeHeight;
+```
+
+At 0 the spike is symmetric. Positive values tilt the tip downward, negative upward. This
+changes the shape of the survivable gap asymmetrically — a downward-tilted spike is
+forgiving to a rising bird and punishing to a falling one — which gives the RL agent a
+genuinely different problem to solve without changing the spike count.
+
+The collision test in `REVIEW.md` §4 assumes a symmetric taper and must be generalised:
+compute the half-height at a given depth from the two edges of the actual (possibly skewed)
+triangle rather than from `(spikeWidth/2) * (1 - d/spikeHeight)`. Do not ship a tilted
+spike whose hitbox is still symmetric — that reintroduces the exact class of bug that
+finding #4 documents.
+
+### 1.5 Panel UI
 
 Render the panel as **HTML DOM alongside the canvas** — not drawn into the canvas.
 Use a flex row: canvas on the left, a fixed ~320 px control column on the right that
@@ -66,17 +124,25 @@ matching `<input type="number">` for exact entry. Ranges:
 |---|---|---|---|
 | `gravity` | 200 | 5000 | 10 |
 | `flapVelocity` | -1200 | -100 | 5 |
+| `maxFallSpeed` | 150 | 2000 | 10 |
 | `horizontalSpeed` | 60 | 900 | 5 |
+| `impulseFrames` | 1 | 20 | 1 |
 | `birdRadius` | 6 | 40 | 1 |
 | `spikeWidth` | 10 | 60 | 1 |
 | `spikeHeight` | 8 | 60 | 1 |
+| `spikeAngle` | -45 | 45 | 1 |
 | `spikeCountMin` | 0 | 9 | 1 |
 | `spikeCountMax` | 0 | 9 | 1 |
 | `candyChance` | 0 | 1 | 0.05 |
 
 Clamp so `spikeCountMin <= spikeCountMax` whenever either moves.
 
-### 1.3 Derived-values readout (important)
+**These ranges are mandatory, not suggestions.** A slider whose range cannot reach the
+correct value is worse than no slider, because it makes a bug look like a deliberate
+setting. `gravity` in particular must span 200–5000: any range topping out below ~1600
+cannot express working physics at all.
+
+### 1.6 Derived-values readout (important)
 
 Directly beneath the gravity and flap sliders, display continuously-updated derived
 quantities. These are what make a bad parameter pair visible *before* playing:
@@ -85,18 +151,42 @@ quantities. These are what make a bad parameter pair visible *before* playing:
 - **Time to apex** = `|flapVelocity| / gravity` s
 - **Horizontal travel per jump** = `horizontalSpeed * 2 * timeToApex` px
 - **Wall-to-wall crossing time** = `(540 - 2*12) / horizontalSpeed` s
-- **Jumps per crossing** = crossing time / (2 * time to apex)
+- **Taps per crossing** = crossing time / (2 * time to apex) — the single best one-number
+  summary of how busy the game feels. Below ~2 it is a waiting game; above ~8 it is
+  button-mashing. Target 4–6.
+- **Time to reach terminal velocity** = `maxFallSpeed / gravity` s, and the fall distance
+  covered getting there. Flag when terminal velocity is never reached within the screen
+  height, since the cap is then doing nothing.
 
 Colour the jump-height readout amber when it exceeds 300 px and red when it exceeds
 960 px (the bird can reach the ceiling from the floor in one tap — the exact failure the
 original build shipped with).
 
-### 1.4 Presets and persistence
+### 1.7 Presets and persistence
 
-Provide preset buttons: **Spec Default**, **Floaty** (gravity 800, flap -380),
-**Twitchy** (gravity 3000, flap -700), and **Broken (original)** (gravity 27) kept
-deliberately as a demonstration of the bug. Persist the live config to `localStorage`
-under `dtts_physics` and restore on load. Include a **Reset to Spec Default** button.
+Provide preset buttons:
+
+| Preset | gravity | flap | maxFall | hSpeed | style | Taps/crossing |
+|---|---|---|---|---|---|---|
+| **Spec Default** | 1620 | -510 | 600 | 270 | instant | 3.0 |
+| **Classic (ported)** | 3900 | -740 | 500 | 340 | impulse (9) | 4.0 |
+| **Floaty** | 800 | -380 | 350 | 220 | instant | 2.1 |
+| **Twitchy** | 4800 | -820 | 900 | 420 | instant | 3.6 |
+| **Broken (original)** | 27 | -510 | 600 | 270 | instant | 0.05 |
+
+**Classic (ported)** reproduces the feel of an earlier Python/OpenCV prototype of this game
+that played better than the spec defaults. That build used a fundamentally different model:
+constant-velocity fall (no acceleration at all) at 200 px/s on a 300x500 field, with a jump
+that applied a fixed upward step over 3 ticks. Scaled to this 540x960 canvas that is a
+~115 px rise against a 384 px/s capped fall — roughly 4 taps per crossing, against 3.0 for
+the spec defaults. The preset above approximates that feel within a parabolic model: a
+smaller, faster hop under stronger gravity with a firm fall cap.
+
+**Broken (original)** is retained deliberately as a demonstration of the shipped bug, and
+is the reason the gravity slider must reach 5000 while still resolving a value of 27.
+
+Persist the live config to `localStorage` under `dtts_physics` and restore on load.
+Include a **Reset to Spec Default** button.
 
 ---
 
@@ -224,15 +314,22 @@ The task is complete when all of the following hold:
 1. A human can still play the game exactly as before, with a correct 80 px jump arc.
 2. Moving the gravity slider changes the bird's arc immediately, mid-flight, without a
    reload, and the derived jump-height readout agrees with observed behaviour.
-3. Starting from a cleared table under spec-default physics, AI_TRAIN reaches a
+3. Every slider reaches its full mandated range, and the **Broken (original)** and
+   **Spec Default** presets are both selectable — i.e. the gravity control resolves both 27
+   and 1620 without clamping either away.
+4. At `spikeAngle = 30`, the spike hitbox visibly tracks the tilted sprite: grazing the
+   overhanging side kills, and the opened side does not.
+5. Raising `gravity` with `maxFallSpeed` held constant makes the bird reach a *visibly
+   constant* descent rate partway down, rather than accelerating all the way to the floor.
+6. Starting from a cleared table under spec-default physics, AI_TRAIN reaches a
    **50-episode moving average above 15 points within 5,000 episodes**, and the sparkline
    shows a visibly rising trend rather than a flat line.
-4. AI_PLAY with the trained policy visibly threads spike gaps rather than flapping
+7. AI_PLAY with the trained policy visibly threads spike gaps rather than flapping
    randomly.
-5. Turbo mode at 5,000 steps/frame keeps the page responsive — sliders still drag.
-6. Exporting a policy, reloading the page, and importing it restores the same play
+8. Turbo mode at 5,000 steps/frame keeps the page responsive — sliders still drag.
+9. Exporting a policy, reloading the page, and importing it restores the same play
    quality.
-7. The file remains a single self-contained `.html` with no external requests.
+10. The file remains a single self-contained `.html` with no external requests.
 
 ## Notes on approach
 

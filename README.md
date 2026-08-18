@@ -1,6 +1,6 @@
 # qwen-A3B-experiment
 
-**Can a 35B mixture-of-experts model, running entirely on a six-year-old gaming laptop
+**Can a 35B mixture-of-experts model, running entirely on an eight-year-old gaming laptop
 with a 6 GB GTX 1060, build a complete arcade game unattended?**
 
 Yes. It took 22 minutes at ~11 tokens/second, and the result runs.
@@ -48,7 +48,7 @@ unverified — turned out to characterise the whole run.
 
 ## The hardware
 
-Nothing here is a datacentre. This is a 2018 gaming laptop.
+Nothing here is a datacentre. This is a 2018 gaming laptop — eight years old.
 
 | Component | Spec |
 |---|---|

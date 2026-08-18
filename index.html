@@ -8,26 +8,214 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
 canvas { max-width: 100%; max-height: 100vh; object-fit: contain; }
+#config-toggle {
+  position: fixed; top: 10px; right: 10px; z-index: 100;
+  background: #2c3e50; color: #fff; border: 2px solid #3498db;
+  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px;
+  font-family: Arial, sans-serif; transition: all 0.2s;
+}
+#config-toggle:hover { background: #3498db; }
+#config-panel {
+  position: fixed; top: 0; right: 0; z-index: 99;
+  width: 320px; height: 100vh; background: rgba(20, 20, 40, 0.97);
+  border-left: 2px solid #3498db; overflow-y: auto;
+  transform: translateX(100%); transition: transform 0.3s ease;
+  padding: 50px 20px 20px; font-family: Arial, sans-serif;
+}
+#config-panel.open { transform: translateX(0); }
+#config-panel h2 { color: #3498db; font-size: 18px; margin-bottom: 20px; text-align: center; }
+.config-group { margin-bottom: 18px; }
+.config-group label {
+  display: flex; justify-content: space-between; align-items: center;
+  color: #ecf0f1; font-size: 13px; margin-bottom: 4px;
+}
+.config-group label span.val { color: #3498db; font-weight: bold; min-width: 40px; text-align: right; }
+.config-group input[type="range"] {
+  width: 100%; height: 6px; -webkit-appearance: none; appearance: none;
+  background: #2c3e50; border-radius: 3px; outline: none; cursor: pointer;
+}
+.config-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
+  background: #3498db; border-radius: 50%; cursor: pointer; border: 2px solid #2980b9;
+}
+.config-group input[type="range"]::-moz-range-thumb {
+  width: 18px; height: 18px; background: #3498db; border-radius: 50%;
+  cursor: pointer; border: 2px solid #2980b9;
+}
+.config-group input[type="number"] {
+  width: 60px; background: #2c3e50; color: #3498db; border: 1px solid #3498db;
+  border-radius: 4px; padding: 2px 4px; font-size: 12px; text-align: center;
+  font-family: monospace;
+}
+.config-divider {
+  border: none; border-top: 1px solid #3498db33; margin: 18px 0;
+}
+.config-section-title {
+  color: #e67e22; font-size: 14px; font-weight: bold; margin-bottom: 12px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+#reset-btn {
+  width: 100%; padding: 8px; background: #e74c3c; color: #fff; border: none;
+  border-radius: 6px; cursor: pointer; font-size: 13px; font-family: Arial;
+  margin-top: 10px; transition: background 0.2s;
+}
+#reset-btn:hover { background: #c0392b; }
 </style>
 </head>
 <body>
 <canvas id="game" width="540" height="960"></canvas>
+<button id="config-toggle">⚙ Config</button>
+<div id="config-panel">
+  <h2>⚙ Physics Config</h2>
+  <div class="config-section-title">Gravity</div>
+  <div class="config-group">
+    <label>Gravity (px/s²) <span class="val" id="gravity-val">27</span></label>
+    <input type="range" id="gravity-slider" min="1" max="80" step="1" value="27">
+    <input type="number" id="gravity-num" min="1" max="80" step="1" value="27">
+  </div>
+  <div class="config-group">
+    <label>Jump Force (px/s) <span class="val" id="flap-val">-510</span></label>
+    <input type="range" id="flap-slider" min="-1000" max="-100" step="10" value="-510">
+    <input type="number" id="flap-num" min="-1000" max="-100" step="10" value="-510">
+  </div>
+  <div class="config-group">
+    <label>Horizontal Speed (px/s) <span class="val" id="vx-val">270</span></label>
+    <input type="range" id="vx-slider" min="50" max="500" step="10" value="270">
+    <input type="number" id="vx-num" min="50" max="500" step="10" value="270">
+  </div>
+  <hr class="config-divider">
+  <div class="config-section-title">Bird</div>
+  <div class="config-group">
+    <label>Bird Radius (px) <span class="val" id="bird-r-val">16</span></label>
+    <input type="range" id="bird-r-slider" min="8" max="30" step="1" value="16">
+    <input type="number" id="bird-r-num" min="8" max="30" step="1" value="16">
+  </div>
+  <hr class="config-divider">
+  <div class="config-section-title">Spike</div>
+  <div class="config-group">
+    <label>Spike Width (px) <span class="val" id="spike-w-val">30</span></label>
+    <input type="range" id="spike-w-slider" min="10" max="60" step="1" value="30">
+    <input type="number" id="spike-w-num" min="10" max="60" step="1" value="30">
+  </div>
+  <div class="config-group">
+    <label>Spike Height (px) <span class="val" id="spike-h-val">24</span></label>
+    <input type="range" id="spike-h-slider" min="10" max="50" step="1" value="24">
+    <input type="number" id="spike-h-num" min="10" max="50" step="1" value="24">
+  </div>
+  <hr class="config-divider">
+  <div class="config-section-title">Candy</div>
+  <div class="config-group">
+    <label>Candy Radius (px) <span class="val" id="candy-r-val">12</span></label>
+    <input type="range" id="candy-r-slider" min="6" max="25" step="1" value="12">
+    <input type="number" id="candy-r-num" min="6" max="25" step="1" value="12">
+  </div>
+  <div class="config-group">
+    <label>Candy Spawn Chance (%) <span class="val" id="candy-chance-val">50</span></label>
+    <input type="range" id="candy-chance-slider" min="0" max="100" step="5" value="50">
+    <input type="number" id="candy-chance-num" min="0" max="100" step="5" value="50">
+  </div>
+  <hr class="config-divider">
+  <div class="config-section-title">Difficulty</div>
+  <div class="config-group">
+    <label>Wall Border (px) <span class="val" id="wall-border-val">12</span></label>
+    <input type="range" id="wall-border-slider" min="5" max="30" step="1" value="12">
+    <input type="number" id="wall-border-num" min="5" max="30" step="1" value="12">
+  </div>
+  <div class="config-group">
+    <label>Min Spikes (Easy) <span class="val" id="min-spike-val">2</span></label>
+    <input type="range" id="min-spike-slider" min="1" max="5" step="1" value="2">
+    <input type="number" id="min-spike-num" min="1" max="5" step="1" value="2">
+  </div>
+  <div class="config-group">
+    <label>Max Spikes (Easy) <span class="val" id="max-spike-val">3</span></label>
+    <input type="range" id="max-spike-slider" min="2" max="6" step="1" value="3">
+    <input type="number" id="max-spike-num" min="2" max="6" step="1" value="3">
+  </div>
+  <button id="reset-btn">Reset to Defaults</button>
+</div>
 <script>
+// --- CONFIG PANEL ---
+const configToggle = document.getElementById('config-toggle');
+const configPanel = document.getElementById('config-panel');
+let configOpen = false;
+
+configToggle.addEventListener('click', () => {
+  configOpen = !configOpen;
+  configPanel.classList.toggle('open', configOpen);
+});
+
+const defaults = {
+  gravity: 27, flap: -510, vx: 270, birdR: 16,
+  spikeW: 30, spikeH: 24, candyR: 12, candyChance: 50,
+  wallBorder: 12, minSpike: 2, maxSpike: 3
+};
+
+let config = { ...defaults };
+
+function syncSliderToNum(sliderId, numId) {
+  const slider = document.getElementById(sliderId);
+  const num = document.getElementById(numId);
+  slider.addEventListener('input', () => {
+    num.value = slider.value;
+  });
+  num.addEventListener('input', () => {
+    slider.value = num.value;
+  });
+}
+
+function setupConfig(key, sliderId, numId, valId, displayFn) {
+  const slider = document.getElementById(sliderId);
+  const num = document.getElementById(numId);
+  const valEl = document.getElementById(valId);
+  syncSliderToNum(sliderId, numId);
+  slider.addEventListener('input', () => {
+    config[key] = parseFloat(slider.value);
+    valEl.textContent = displayFn(config[key]);
+  });
+  num.addEventListener('input', () => {
+    config[key] = parseFloat(num.value);
+    valEl.textContent = displayFn(config[key]);
+  });
+  valEl.textContent = displayFn(config[key]);
+}
+
+function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+setupConfig('gravity', 'gravity-slider', 'gravity-num', 'gravity-val', v => clamp(v, 1, 80));
+setupConfig('flap', 'flap-slider', 'flap-num', 'flap-val', v => clamp(v, -1000, -100));
+setupConfig('vx', 'vx-slider', 'vx-num', 'vx-val', v => clamp(v, 50, 500));
+setupConfig('birdR', 'bird-r-slider', 'bird-r-num', 'bird-r-val', v => clamp(v, 8, 30));
+setupConfig('spikeW', 'spike-w-slider', 'spike-w-num', 'spike-w-val', v => clamp(v, 10, 60));
+setupConfig('spikeH', 'spike-h-slider', 'spike-h-num', 'spike-h-val', v => clamp(v, 10, 50));
+setupConfig('candyR', 'candy-r-slider', 'candy-r-num', 'candy-r-val', v => clamp(v, 6, 25));
+setupConfig('candyChance', 'candy-chance-slider', 'candy-chance-num', 'candy-chance-val', v => clamp(v, 0, 100));
+setupConfig('wallBorder', 'wall-border-slider', 'wall-border-num', 'wall-border-val', v => clamp(v, 5, 30));
+setupConfig('minSpike', 'min-spike-slider', 'min-spike-num', 'min-spike-val', v => clamp(v, 1, 5));
+setupConfig('maxSpike', 'max-spike-slider', 'max-spike-num', 'max-spike-val', v => clamp(v, 2, 6));
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  config = { ...defaults };
+  for (const key of Object.keys(defaults)) {
+    const slider = document.getElementById(key + '-slider');
+    const num = document.getElementById(key + '-num');
+    if (slider) slider.value = defaults[key];
+    if (num) num.value = defaults[key];
+  }
+  for (const key of Object.keys(defaults)) {
+    document.getElementById(key + '-val').textContent = defaults[key];
+  }
+});
+
+// --- GAME ---
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = 540, H = 960;
-const BIRD_R = 16;
-const GRAVITY = 27;
-const FLAP = -510;
-const VX = 270;
 const SLOT_H = H / 11;
-const SPIKE_W = 30, SPIKE_H = 24;
-const WALL_BORDER = 12;
-const CANDY_R = 12;
+const WALL_BORDER = config.wallBorder;
+const CANDY_COLOR = '#f1c40f';
 const WALL_COLOR = '#95a5a6';
 const BIRD_COLOR = '#ff6b35';
 const SPIKE_COLOR = '#e74c3c';
-const CANDY_COLOR = '#f1c40f';
 
 // Game State
 const START_MENU = 0, GAMEPLAY = 1, GAME_OVER = 2;
@@ -38,7 +226,7 @@ let candyCount = parseInt(localStorage.getItem('dqts_candies')) || 0;
 let screenShake = { x: 0, y: 0, frames: 0 };
 let gameOverAnim = { active: false, time: 0, birdY: 0, birdAngle: 0, whiteFlash: 0 };
 let particles = [];
-let bird = { x: W / 2, y: H / 2, vx: VX, vy: 0 };
+let bird = { x: W / 2, y: H / 2, vx: config.vx, vy: 0 };
 let rightWallSpikes = [];
 let leftWallSpikes = [];
 let rightWallHasSpikes = true;
@@ -48,7 +236,7 @@ let lastTime = 0;
 let scoreFlash = 0;
 
 function initGame() {
-  bird = { x: W / 2, y: H / 2, vx: VX, vy: 0 };
+  bird = { x: W / 2, y: H / 2, vx: config.vx, vy: 0 };
   score = 0;
   screenShake = { x: 0, y: 0, frames: 0 };
   gameOverAnim = { active: false, time: 0, birdY: H / 2, birdAngle: 0, whiteFlash: 0 };
@@ -70,8 +258,8 @@ function initWalls() {
 
 function spawnSpikeWall(wallSpikes, x) {
   wallSpikes = [];
-  const difficulty = score <= 5 ? [2, 3] : score <= 15 ? [3, 4] : [4, 5];
-  const count = difficulty[0] + Math.floor(Math.random() * (difficulty[1] - difficulty[0] + 1));
+  const diff = score <= 5 ? [config.minSpike, config.maxSpike] : score <= 15 ? [3, 4] : [4, 5];
+  const count = diff[0] + Math.floor(Math.random() * (diff[1] - diff[0] + 1));
   const availableSlots = [];
   for (let i = 1; i < 10; i++) {
     const hasSpike = wallSpikes.some(s => Math.floor(s.y / SLOT_H) === i);
@@ -88,7 +276,7 @@ function spawnSpikeWall(wallSpikes, x) {
 
 function spawnCandy() {
   if (candy) return;
-  if (Math.random() > 0.5) return;
+  if (Math.random() > config.candyChance / 100) return;
   const hasSpikes = rightWallHasSpikes ? rightWallSpikes : leftWallSpikes;
   const x = rightWallHasSpikes ? W - WALL_BORDER - 40 : WALL_BORDER + 40;
   const safeSlots = [];
@@ -135,8 +323,8 @@ function flap() {
     return;
   }
   if (state !== GAMEPLAY) return;
-  bird.vy = FLAP;
-  addParticles(bird.x, bird.y + BIRD_R, WALL_COLOR, 6, 'wall');
+  bird.vy = config.flap;
+  addParticles(bird.x, bird.y + config.birdR, WALL_COLOR, 6, 'wall');
 }
 
 document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); flap(); } });
@@ -145,10 +333,9 @@ canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); });
 
 function checkSpikeCollision() {
   const spikes = [...rightWallSpikes, ...leftWallSpikes];
-  const wallX = rightWallHasSpikes ? W - WALL_BORDER : WALL_BORDER;
   for (const s of spikes) {
-    if (bird.x + BIRD_R > s.x - SPIKE_W / 2 && bird.x - BIRD_R < s.x + SPIKE_W / 2 &&
-        bird.y + BIRD_R > s.y - SPIKE_H && bird.y - BIRD_R < s.y) {
+    if (bird.x + config.birdR > s.x - config.spikeW / 2 && bird.x - config.birdR < s.x + config.spikeW / 2 &&
+        bird.y + config.birdR > s.y - config.spikeH && bird.y - config.birdR < s.y) {
       return true;
     }
   }
@@ -158,7 +345,7 @@ function checkSpikeCollision() {
 function checkCandyCollection() {
   if (!candy) return;
   const dx = bird.x - candy.x, dy = bird.y - candy.y;
-  if (Math.sqrt(dx * dx + dy * dy) < BIRD_R + CANDY_R) {
+  if (Math.sqrt(dx * dx + dy * dy) < config.birdR + config.candyR) {
     candyCount++;
     localStorage.setItem('dqts_candies', candyCount);
     addParticles(candy.x, candy.y, CANDY_COLOR, 10, 'candy');
@@ -167,34 +354,34 @@ function checkCandyCollection() {
 }
 
 function checkWallCollision() {
-  if (bird.x + BIRD_R > W - WALL_BORDER) {
-    bird.x = W - WALL_BORDER - BIRD_R;
-    bird.vx = -VX;
+  if (bird.x + config.birdR > W - WALL_BORDER) {
+    bird.x = W - WALL_BORDER - config.birdR;
+    bird.vx = -config.vx;
     shakeScreen();
-    addParticles(bird.x + BIRD_R, bird.y, WALL_COLOR, 6, 'wall');
+    addParticles(bird.x + config.birdR, bird.y, WALL_COLOR, 6, 'wall');
     scoreFlash = 1;
     score++;
     rightWallHasSpikes = false;
     rightWallSpikes = spawnSpikeWall([], WALL_BORDER + 15);
     spawnCandy();
   }
-  if (bird.x - BIRD_R < WALL_BORDER) {
-    bird.x = WALL_BORDER + BIRD_R;
-    bird.vx = VX;
+  if (bird.x - config.birdR < WALL_BORDER) {
+    bird.x = WALL_BORDER + config.birdR;
+    bird.vx = config.vx;
     shakeScreen();
-    addParticles(bird.x - BIRD_R, bird.y, WALL_COLOR, 6, 'wall');
+    addParticles(bird.x - config.birdR, bird.y, WALL_COLOR, 6, 'wall');
     scoreFlash = 1;
     score++;
     rightWallHasSpikes = true;
     rightWallSpikes = spawnSpikeWall([], W - WALL_BORDER - 15);
     spawnCandy();
   }
-  if (bird.y - BIRD_R < SPIKE_H) {
-    bird.y = SPIKE_H + BIRD_R;
+  if (bird.y - config.birdR < config.spikeH) {
+    bird.y = config.spikeH + config.birdR;
     bird.vy = Math.abs(bird.vy) * 0.5;
   }
-  if (bird.y + BIRD_R > H - SPIKE_H) {
-    bird.y = H - SPIKE_H - BIRD_R;
+  if (bird.y + config.birdR > H - config.spikeH) {
+    bird.y = H - config.spikeH - config.birdR;
     bird.vy = -Math.abs(bird.vy) * 0.5;
   }
 }
@@ -224,7 +411,7 @@ function update(dt) {
     return;
   }
   scoreFlash *= 0.9;
-  bird.vy += GRAVITY * dt;
+  bird.vy += config.gravity * dt;
   bird.x += bird.vx * dt;
   bird.y += bird.vy * dt;
   checkWallCollision();
@@ -253,9 +440,9 @@ function update(dt) {
 function drawSpike(x, y, dir) {
   ctx.fillStyle = SPIKE_COLOR;
   ctx.beginPath();
-  ctx.moveTo(x - SPIKE_W / 2, y + dir * SPIKE_H / 2);
-  ctx.lineTo(x + SPIKE_W / 2, y + dir * SPIKE_H / 2);
-  ctx.lineTo(x, y - dir * SPIKE_H / 2);
+  ctx.moveTo(x - config.spikeW / 2, y + dir * config.spikeH / 2);
+  ctx.lineTo(x + config.spikeW / 2, y + dir * config.spikeH / 2);
+  ctx.lineTo(x, y - dir * config.spikeH / 2);
   ctx.closePath();
   ctx.fill();
 }
@@ -264,7 +451,7 @@ function drawBird(x, y, vx) {
   const dir = vx > 0 ? 1 : -1;
   ctx.fillStyle = BIRD_COLOR;
   ctx.beginPath();
-  ctx.arc(x, y, BIRD_R, 0, Math.PI * 2);
+  ctx.arc(x, y, config.birdR, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.beginPath();
@@ -289,10 +476,10 @@ function drawCandy(x, y, angle) {
   ctx.rotate(angle);
   ctx.fillStyle = CANDY_COLOR;
   ctx.beginPath();
-  ctx.moveTo(0, -CANDY_R);
-  ctx.lineTo(CANDY_R, 0);
-  ctx.lineTo(0, CANDY_R);
-  ctx.lineTo(-CANDY_R, 0);
+  ctx.moveTo(0, -config.candyR);
+  ctx.lineTo(config.candyR, 0);
+  ctx.lineTo(0, config.candyR);
+  ctx.lineTo(-config.candyR, 0);
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -320,8 +507,10 @@ function draw() {
   for (const s of spikes) {
     drawSpike(s.x, s.y, s.dir);
   }
-  const wallX = rightWallHasSpikes ? W - WALL_BORDER : WALL_BORDER;
-  const oppositeWallX = rightWallHasSpikes ? WALL_BORDER : W - WALL_BORDER;
+  const oppositeSpikes = rightWallHasSpikes ? leftWallSpikes : rightWallSpikes;
+  for (const s of oppositeSpikes) {
+    drawSpike(s.x, s.y, s.dir);
+  }
   ctx.strokeStyle = WALL_COLOR;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -332,10 +521,6 @@ function draw() {
   ctx.moveTo(W - WALL_BORDER, 0);
   ctx.lineTo(W - WALL_BORDER, H);
   ctx.stroke();
-  const oppositeSpikes = rightWallHasSpikes ? leftWallSpikes : rightWallSpikes;
-  for (const s of oppositeSpikes) {
-    drawSpike(s.x, s.y, s.dir);
-  }
   if (candy) drawCandy(candy.x, candy.y, candy.angle);
   for (const p of particles) {
     ctx.globalAlpha = p.life;
