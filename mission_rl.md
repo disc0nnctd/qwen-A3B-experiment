@@ -27,7 +27,8 @@ The two that block everything downstream:
   hitbox and the sprite are the same shape.
 
 Do not begin Phase 1 until the game is playable by a human and the jump arc is roughly
-80 px tall.
+80 px tall — that is the spec-literal value and confirms the conversion is right. Phase 1
+then retunes it deliberately to 58 px for feel; see 1.1b.
 
 ---
 
@@ -40,10 +41,10 @@ every consumer read from it at use time so changes apply live without a reload:
 
 ```js
 const PHYSICS_DEFAULTS = {
-  gravity:      1620,   // px/s^2
-  flapVelocity: -510,   // px/s, absolute reset (not additive)
-  maxFallSpeed:  600,   // px/s, terminal velocity — see 1.2, this one matters
-  horizontalSpeed: 270, // px/s
+  gravity:      4200,   // px/s^2   \
+  flapVelocity: -700,   // px/s      | tuned set — derived in 1.1b, not the
+  maxFallSpeed:  850,   // px/s      | literal spec values. Ship these.
+  horizontalSpeed: 290, // px/s     /
   jumpStyle: 'instant', // 'instant' | 'impulse' — see 1.3
   impulseFrames:   9,   // only used when jumpStyle === 'impulse'
   birdRadius:    16,    // px
@@ -56,6 +57,42 @@ const PHYSICS_DEFAULTS = {
 };
 ```
 
+### 1.1b Where the tuned defaults come from
+
+Do not ship the literal spec constants. `gravity 1620 / flap -510 / vx 270` is the correct
+*conversion* of the original brief, but it produces a game that plays slack: 2.85 taps per
+wall crossing, which is mostly waiting. The values above are derived from the playfield
+geometry instead, and every one is reproducible from these four constraints:
+
+**Geometry.** The canvas is 540x960. With a 12 px wall border and a 16 px bird radius, the
+bird's centre travels `540 - 2(12) - 2(16) = 484 px` per crossing. The 11 spike slots are
+`960 / 11 = 87.3 px` tall.
+
+**1. Crossing time — 1.6 to 2.0 s.** Long enough to read the next wall's spike layout,
+short enough to stay urgent. `484 / 290 = 1.67 s`.
+
+**2. Taps per crossing — 5.** This genre lives at 4–6; below 3 the player is idling
+between inputs. `1.67 s / 5 = 0.334 s` per full jump cycle.
+
+**3. Jump height — below one slot.** A tap should reposition the bird meaningfully without
+skipping a whole gap, so target ~60 px against the 87.3 px slot.
+
+Solving the parabolic relations `h = v^2/2g` and `T = 2v/g` (equivalently `h = vT/4`) for
+`h = 60, T = 0.334` gives `v = 719, g = 4305`. Rounded to **`flap -700, gravity 4200`**,
+which lands at 58.3 px and 0.333 s — 5.01 taps per crossing.
+
+**4. Fall cap — 850 px/s.** At `g = 4200` an uncapped fall the height of the screen reaches
+**2768 px/s**, three screen-heights per second and entirely unrecoverable. A cap of 850
+engages 0.202 s after apex, having fallen 86 px. Since a normal hop only rises 58 px, the
+cap never touches routine play — it exists purely to make a genuine long fall survivable.
+That is what a terminal velocity should do: bound the worst case without altering the
+normal loop.
+
+**Sanity check on the gap.** Adjacent spikes leave `87.3 - 30 = 57.3 px` of vertical space
+against a 32 px bird — 25.3 px of clearance, tight but fair. This also bounds `birdRadius`:
+above `(87.3 - spikeWidth)/2 = 28.6 px` the bird physically cannot pass a single-slot gap,
+even though the slider allows 40. See the clearance readout in 1.6.
+
 ### 1.2 Terminal velocity — the highest-value addition
 
 Clamp downward velocity every step:
@@ -64,9 +101,10 @@ Clamp downward velocity every step:
 bird.vy = Math.min(bird.vy + gravity * dt, maxFallSpeed);
 ```
 
-Without a cap, a fall from the ceiling to the floor at `gravity = 1620` reaches
-`sqrt(2 * 1620 * 900) = 1708 px/s` — the bird crosses 1.8 screen-heights per second and
-becomes unrecoverable long before the player can react. Every game in this genre caps fall
+Without a cap, a fall from the ceiling to the floor at the tuned `gravity = 4200` reaches
+`sqrt(2 * 4200 * 912) = 2768 px/s` — nearly three screen-heights per second, and
+unrecoverable long before the player can react. Even at the slack spec value of 1620 it
+still hits 1708 px/s. Every game in this genre caps fall
 speed; the arc is parabolic on the way up and effectively linear once the cap is hit, which
 is what makes a long fall readable rather than a stone drop.
 
@@ -157,6 +195,10 @@ quantities. These are what make a bad parameter pair visible *before* playing:
 - **Time to reach terminal velocity** = `maxFallSpeed / gravity` s, and the fall distance
   covered getting there. Flag when terminal velocity is never reached within the screen
   height, since the cap is then doing nothing.
+- **Gap clearance** = `(960/11) - spikeWidth - 2 * birdRadius` px — the vertical room left
+  for the bird between two adjacent spikes. Turn this red at or below 0: the bird cannot
+  fit through a single-slot gap and the game is unwinnable, which `birdRadius` above
+  ~28.6 px causes at the default spike width even though the slider permits 40.
 
 Colour the jump-height readout amber when it exceeds 300 px and red when it exceeds
 960 px (the bird can reach the ceiling from the floor in one tap — the exact failure the
@@ -166,27 +208,26 @@ original build shipped with).
 
 Provide preset buttons:
 
-| Preset | gravity | flap | maxFall | hSpeed | style | Taps/crossing |
+| Preset | gravity | flap | maxFall | hSpeed | Jump | Taps/crossing |
 |---|---|---|---|---|---|---|
-| **Spec Default** | 1620 | -510 | 600 | 270 | instant | 3.0 |
-| **Classic (ported)** | 3900 | -740 | 500 | 340 | impulse (9) | 4.0 |
-| **Floaty** | 800 | -380 | 350 | 220 | instant | 2.1 |
-| **Twitchy** | 4800 | -820 | 900 | 420 | instant | 3.6 |
-| **Broken (original)** | 27 | -510 | 600 | 270 | instant | 0.05 |
+| **Tuned** (default) | 4200 | -700 | 850 | 290 | 58 px | **5.0** |
+| **Balanced** | 2600 | -600 | 750 | 280 | 69 px | 3.8 |
+| **Floaty** | 1300 | -470 | 500 | 240 | 85 px | 2.8 |
+| **Twitchy** | 5000 | -620 | 1000 | 350 | 38 px | 5.6 |
+| **Spec Literal** | 1620 | -510 | 600 | 270 | 80 px | 2.9 |
+| **Broken (as shipped)** | 27 | -510 | 600 | 270 | 4816 px | 0.05 |
 
-**Classic (ported)** reproduces the feel of an earlier Python/OpenCV prototype of this game
-that played better than the spec defaults. That build used a fundamentally different model:
-constant-velocity fall (no acceleration at all) at 200 px/s on a 300x500 field, with a jump
-that applied a fixed upward step over 3 ticks. Scaled to this 540x960 canvas that is a
-~115 px rise against a 384 px/s capped fall — roughly 4 taps per crossing, against 3.0 for
-the spec defaults. The preset above approximates that feel within a parabolic model: a
-smaller, faster hop under stronger gravity with a firm fall cap.
+**Tuned** is the default and the one to ship — derived in 1.1b.
 
-**Broken (original)** is retained deliberately as a demonstration of the shipped bug, and
-is the reason the gravity slider must reach 5000 while still resolving a value of 27.
+**Spec Literal** is the faithful conversion of the original brief, kept for comparison. It
+is not wrong, just slack; playing the two back to back is the clearest demonstration of
+what "taps per crossing" measures.
+
+**Broken (as shipped)** reproduces the defect the generated build actually had, and is the
+reason the gravity slider must span 200–5000 while still resolving a value of 27.
 
 Persist the live config to `localStorage` under `dtts_physics` and restore on load.
-Include a **Reset to Spec Default** button.
+Include a **Reset to Tuned Default** button.
 
 ---
 
