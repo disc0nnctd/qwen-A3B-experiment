@@ -207,11 +207,16 @@ A single-pass benchmark would have published that artefact.
 ### Benchmark honestly: `llama-bench` will lie to you
 
 The most transferable lesson from setting this up. `llama-bench` gave the wrong answer
-twice, in both directions:
+three times, in both directions:
 
 - It reported 11.8 tok/s for the MTP configuration. Real serving throughput was 5.2.
 - It recommended a layer count that collapsed to 10.2 tok/s under the real server, because
   it does not account for the VRAM the actual serving context consumes.
+- It **under**-reported baseline generation by ~45% — 11.94 tok/s against the server's
+  16.76 at identical settings — because its default `tg32` run is too short to amortise
+  threadpool spin-up on a CPU-side MoE. This one is the most dangerous of the three,
+  because a pessimistic benchmark does not look like an error. It looks like your hardware.
+  See [below](#these-numbers-supersede-an-earlier-set-and-here-is-why-they-differ).
 
 Every number in this README was measured **against the running server** under realistic
 load. Tune against the thing you will actually run.
@@ -242,24 +247,46 @@ the "doubles on large batches" that a two-point measurement suggested. Cache hit
 free: 39,413 tokens replayed in 0 s, which is what actually makes an agentic loop viable,
 since each turn re-reads a large and mostly-unchanged context.
 
-### These numbers supersede an earlier set, and the gap is unexplained
+### These numbers supersede an earlier set, and here is why they differ
 
-An earlier pass recorded 11.4 tok/s at 16k and 10.6 at 98k. Everything above was
-re-measured on 2026-08-19 with the same binary, model and flags, and came out
-substantially **faster** — 17.25 and 17.16. Thread count does not explain it: `-t 8`, the
-old setting, still measures 16.47 today.
+An earlier pass recorded 11.4 tok/s at 16k and 10.6 at 98k, against the 17.25 and 17.16
+above. The hardware did not change and nothing was optimised. The earlier figures were
+produced by **`llama-bench`**; the ones above were measured against the **running server**.
 
-The machine has not degraded, so the difference is in how or when the original figures were
-taken — plausibly background GPU load, or a different measurement protocol. No VRAM
-overclock is active (`clocks.max.memory` reads 4,004 MHz, stock). Rather than quietly swap
-the numbers, both sets are recorded here: the current ones are the ones to trust, and the
-discrepancy is stated because an unexplained 50% swing is exactly the kind of thing a
-benchmark writeup should not bury.
+Re-running `llama-bench` today on the same model and flags reproduces the old number
+exactly:
 
-The VRAM column moved too, by a consistent 200-350 MiB in the other direction. That one is
-benign: `nvidia-smi` reports *total* board usage, so those figures always included whatever
-else held VRAM at the time. The derived KV cost — 21.0 MiB per 1k tokens — is identical
-across both passes, which is the number that actually matters for planning.
+| Tool | threads | test | tok/s |
+|---|---|---|---|
+| `llama-bench` | 8 | tg32 | **11.94 +/- 2.25** |
+| `llama-bench` | 8 | tg128 | 15.39 +/- 0.36 |
+| `llama-bench` | 6 | tg32 | 15.18 +/- 0.27 |
+| `llama-bench` | 6 | tg128 | 16.12 +/- 0.67 |
+| live server | 8 | 32 tokens | **16.76** |
+| live server | 6 | 32 tokens | **17.15** |
+
+Two effects compound, and both are visible in that table:
+
+- **tg32 is too short a run.** Going from tg32 to tg128 alone takes `-t 8` from 11.94 to
+  15.39. On a CPU-side MoE the first tokens are dominated by threadpool spin-up and CPU
+  boost ramp, and 32 tokens never amortises it. A live server does not pay this cost — its
+  threadpool is already warm. Measured against the server, throughput is flat at ~16.8
+  tok/s from `n_predict` 16 all the way to 512.
+- **`-t 8` is also the noisiest setting**, at +/- 2.25 against +/- 0.27 for `-t 6`. The
+  original configuration sat on the worst-behaved point of both axes at once.
+
+So the honest chain is **11.4 (llama-bench tg32, -t 8) -> 16.8 (real serving, -t 8) ->
+17.2 (real serving, -t 6)**. Only the last 4% is an improvement. The other ~45% was always
+available and was simply being under-reported.
+
+This also corrects a claim this README used to make: that every number in it was measured
+against the running server. That was not true of the throughput and context tables. It is
+true now.
+
+The VRAM column moved too, by 200-350 MiB in the other direction. That one is benign:
+`nvidia-smi` reports *total* board usage, so those figures always included whatever else
+held VRAM at the time. The derived KV cost — 21.0 MiB per 1k tokens — is identical across
+both passes, which is the number that actually matters for planning.
 
 ## The run
 
