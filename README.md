@@ -90,7 +90,7 @@ three hours and been useless; at MoE speeds it took 22 minutes.
 
 (Both rows come from the original measurement pass, so the ratio between them is sound.
 The A3B figure was later re-measured higher — see
-[These numbers supersede an earlier set](#these-numbers-supersede-an-earlier-set-and-the-gap-is-unexplained).
+[These numbers supersede an earlier set](#these-numbers-supersede-an-earlier-set-and-here-is-why-they-differ).
 The dense model was not re-run, so it is left alone rather than compared across protocols.)
 
 ---

@@ -2,618 +2,1145 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Don't Touch The Spikes</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dont Touch The Spikes</title>
+
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
-canvas { max-width: 100%; max-height: 100vh; object-fit: contain; }
-#config-toggle {
-  position: fixed; top: 10px; right: 10px; z-index: 100;
-  background: #2c3e50; color: #fff; border: 2px solid #3498db;
-  border-radius: 8px; padding: 8px 16px; cursor: pointer; font-size: 14px;
-  font-family: Arial, sans-serif; transition: all 0.2s;
-}
-#config-toggle:hover { background: #3498db; }
-#config-panel {
-  position: fixed; top: 0; right: 0; z-index: 99;
-  width: 320px; height: 100vh; background: rgba(20, 20, 40, 0.97);
-  border-left: 2px solid #3498db; overflow-y: auto;
-  transform: translateX(100%); transition: transform 0.3s ease;
-  padding: 50px 20px 20px; font-family: Arial, sans-serif;
-}
-#config-panel.open { transform: translateX(0); }
-#config-panel h2 { color: #3498db; font-size: 18px; margin-bottom: 20px; text-align: center; }
-.config-group { margin-bottom: 18px; }
-.config-group label {
-  display: flex; justify-content: space-between; align-items: center;
-  color: #ecf0f1; font-size: 13px; margin-bottom: 4px;
-}
-.config-group label span.val { color: #3498db; font-weight: bold; min-width: 40px; text-align: right; }
-.config-group input[type="range"] {
-  width: 100%; height: 6px; -webkit-appearance: none; appearance: none;
-  background: #2c3e50; border-radius: 3px; outline: none; cursor: pointer;
-}
-.config-group input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none; width: 18px; height: 18px;
-  background: #3498db; border-radius: 50%; cursor: pointer; border: 2px solid #2980b9;
-}
-.config-group input[type="range"]::-moz-range-thumb {
-  width: 18px; height: 18px; background: #3498db; border-radius: 50%;
-  cursor: pointer; border: 2px solid #2980b9;
-}
-.config-group input[type="number"] {
-  width: 60px; background: #2c3e50; color: #3498db; border: 1px solid #3498db;
-  border-radius: 4px; padding: 2px 4px; font-size: 12px; text-align: center;
-  font-family: monospace;
-}
-.config-divider {
-  border: none; border-top: 1px solid #3498db33; margin: 18px 0;
-}
-.config-section-title {
-  color: #e67e22; font-size: 14px; font-weight: bold; margin-bottom: 12px;
-  text-transform: uppercase; letter-spacing: 1px;
-}
-#reset-btn {
-  width: 100%; padding: 8px; background: #e74c3c; color: #fff; border: none;
-  border-radius: 6px; cursor: pointer; font-size: 13px; font-family: Arial;
-  margin-top: 10px; transition: background 0.2s;
-}
-#reset-btn:hover { background: #c0392b; }
+body { background: #2d2d2d; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; font-family: Segoe UI, sans-serif; padding: 16px; gap: 16px; }
+#game-wrapper { display: flex; gap: 16px; max-width: 1200px; width: 100%; }
+@media (max-width: 900px) { #game-wrapper { flex-direction: column; align-items: center; } }
+#canvas-container { flex: 0 0 540px; }
+#game-canvas { width: 100%; max-height: 95vh; object-fit: contain; border-radius: 8px; display: block; background: #ecf0f1; }
+#panel { flex: 0 0 320px; max-height: 95vh; overflow-y: auto; padding: 12px; background: #3a3a3a; border-radius: 8px; color: #eee; }
+#panel h2, #panel h3 { color: #4fc3f7; margin: 8px 0 4px; font-size: 14px; }
+#panel h2 { margin-top: 12px; border-bottom: 1px solid #555; padding-bottom: 4px; }
+#panel h3 { font-size: 13px; color: #81d4fa; }
+.slider-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; font-size: 12px; }
+.slider-row label { width: 110px; text-align: right; flex-shrink: 0; }
+.slider-row input[type=range] { flex: 1; }
+.slider-row input[type=number] { width: 62px; background: #2d2d2d; color: #eee; border: 1px solid #555; border-radius: 4px; padding: 2px 4px; font-size: 11px; }
+.slider-row .val { width: 44px; text-align: left; font-size: 11px; color: #aaa; flex-shrink: 0; }
+.preset-row { display: flex; gap: 4px; flex-wrap: wrap; margin: 6px 0; }
+.preset-row button { padding: 4px 8px; background: #455a64; color: #eee; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+.preset-row button:hover { background: #546e7a; }
+.derived-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; border-bottom: 1px solid #444; }
+.derived-row .label { color: #aaa; }
+.derived-row .value { color: #eee; }
+.derived-row .value.amber { color: #ff9800; }
+.derived-row .value.red { color: #f44336; }
+.derived-row .value.green { color: #4caf50; }
+.derived-row .value.red-bg { background: rgba(244,67,54,0.3); border-radius: 2px; padding: 0 3px; }
+.mode-control { display: flex; gap: 4px; margin: 8px 0; }
+.mode-control button { flex: 1; padding: 6px; background: #455a64; color: #eee; border: 2px solid transparent; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+.mode-control button.active { border-color: #4fc3f7; background: #37474f; }
+.mode-control button:hover { background: #546e7a; }
+.metric { font-size: 12px; padding: 2px 0; }
+.metric .metric-val { color: #4fc3f7; }
+.sparkline-canvas { width: 100%; height: 80px; background: #2d2d2d; border-radius: 4px; margin: 6px 0; }
+.banner { padding: 6px 10px; border-radius: 4px; margin: 6px 0; font-size: 11px; }
+.banner.amber { background: rgba(255,152,0,0.2); color: #ff9800; }
+.banner.red { background: rgba(244,67,54,0.2); color: #f44336; }
+.action-row { display: flex; gap: 4px; margin: 6px 0; }
+.action-row button { flex: 1; padding: 4px; background: #455a64; color: #eee; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; }
+.action-row button:hover { background: #546e7a; }
+.turbo-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.turbo-row label { font-size: 12px; }
+.turbo-row input[type=checkbox] { width: 16px; }
+.turbo-row input[type=range] { flex: 1; }
+.turbo-row .val { font-size: 11px; color: #aaa; }
 </style>
+
 </head>
 <body>
-<canvas id="game" width="540" height="960"></canvas>
-<button id="config-toggle">⚙ Config</button>
-<div id="config-panel">
-  <h2>⚙ Physics Config</h2>
-  <div class="config-section-title">Gravity</div>
-  <div class="config-group">
-    <label>Gravity (px/s²) <span class="val" id="gravity-val">27</span></label>
-    <input type="range" id="gravity-slider" min="1" max="80" step="1" value="27">
-    <input type="number" id="gravity-num" min="1" max="80" step="1" value="27">
-  </div>
-  <div class="config-group">
-    <label>Jump Force (px/s) <span class="val" id="flap-val">-510</span></label>
-    <input type="range" id="flap-slider" min="-1000" max="-100" step="10" value="-510">
-    <input type="number" id="flap-num" min="-1000" max="-100" step="10" value="-510">
-  </div>
-  <div class="config-group">
-    <label>Horizontal Speed (px/s) <span class="val" id="vx-val">270</span></label>
-    <input type="range" id="vx-slider" min="50" max="500" step="10" value="270">
-    <input type="number" id="vx-num" min="50" max="500" step="10" value="270">
-  </div>
-  <hr class="config-divider">
-  <div class="config-section-title">Bird</div>
-  <div class="config-group">
-    <label>Bird Radius (px) <span class="val" id="bird-r-val">16</span></label>
-    <input type="range" id="bird-r-slider" min="8" max="30" step="1" value="16">
-    <input type="number" id="bird-r-num" min="8" max="30" step="1" value="16">
-  </div>
-  <hr class="config-divider">
-  <div class="config-section-title">Spike</div>
-  <div class="config-group">
-    <label>Spike Width (px) <span class="val" id="spike-w-val">30</span></label>
-    <input type="range" id="spike-w-slider" min="10" max="60" step="1" value="30">
-    <input type="number" id="spike-w-num" min="10" max="60" step="1" value="30">
-  </div>
-  <div class="config-group">
-    <label>Spike Height (px) <span class="val" id="spike-h-val">24</span></label>
-    <input type="range" id="spike-h-slider" min="10" max="50" step="1" value="24">
-    <input type="number" id="spike-h-num" min="10" max="50" step="1" value="24">
-  </div>
-  <hr class="config-divider">
-  <div class="config-section-title">Candy</div>
-  <div class="config-group">
-    <label>Candy Radius (px) <span class="val" id="candy-r-val">12</span></label>
-    <input type="range" id="candy-r-slider" min="6" max="25" step="1" value="12">
-    <input type="number" id="candy-r-num" min="6" max="25" step="1" value="12">
-  </div>
-  <div class="config-group">
-    <label>Candy Spawn Chance (%) <span class="val" id="candy-chance-val">50</span></label>
-    <input type="range" id="candy-chance-slider" min="0" max="100" step="5" value="50">
-    <input type="number" id="candy-chance-num" min="0" max="100" step="5" value="50">
-  </div>
-  <hr class="config-divider">
-  <div class="config-section-title">Difficulty</div>
-  <div class="config-group">
-    <label>Wall Border (px) <span class="val" id="wall-border-val">12</span></label>
-    <input type="range" id="wall-border-slider" min="5" max="30" step="1" value="12">
-    <input type="number" id="wall-border-num" min="5" max="30" step="1" value="12">
-  </div>
-  <div class="config-group">
-    <label>Min Spikes (Easy) <span class="val" id="min-spike-val">2</span></label>
-    <input type="range" id="min-spike-slider" min="1" max="5" step="1" value="2">
-    <input type="number" id="min-spike-num" min="1" max="5" step="1" value="2">
-  </div>
-  <div class="config-group">
-    <label>Max Spikes (Easy) <span class="val" id="max-spike-val">3</span></label>
-    <input type="range" id="max-spike-slider" min="2" max="6" step="1" value="3">
-    <input type="number" id="max-spike-num" min="2" max="6" step="1" value="3">
-  </div>
-  <button id="reset-btn">Reset to Defaults</button>
-</div>
+<div id="game-wrapper">
+<div id="canvas-container"><canvas id="game-canvas" width="540" height="960"></canvas></div>
+
+<div id="panel">
+<h2>Physics Config</h2>
+<div id="derived"></div>
+<h3>Sliders</h3>
+<div id="sliders"></div>
+
+<h3>Presets</h3>
+<div class="preset-row" id="presets"></div>
+
+<div class="action-row"><button id="reset-btn">Reset to Tuned</button></div>
+
+<div id="mode-section"><h3>Mode</h3><div class="mode-control">
+
+<button id="mode-human" class="active">HUMAN</button>
+
+<button id="mode-ai-train">AI_TRAIN</button>
+
+<button id="mode-ai-play">AI_PLAY</button>
+
+</div></div>
+
+<div id="ai-section" style="display:none">
+<h3>AI Training</h3>
+
+<div class="slider-row"><label>Epsilon</label><input type="range" id="ai-epsilon" min="0" max="1" step="0.01" value="1"><span class="val" id="ai-epsilon-val">1.00</span></div>
+
+<div class="slider-row"><label>Alpha</label><input type="range" id="ai-alpha" min="0.01" max="1" step="0.01" value="0.15"><span class="val" id="ai-alpha-val">0.15</span></div>
+
+<div class="slider-row"><label>Gamma</label><input type="range" id="ai-gamma" min="0.1" max="0.99" step="0.01" value="0.98"><span class="val" id="ai-gamma-val">0.98</span></div>
+
+<div class="turbo-row"><input type="checkbox" id="turbo-check"><label for="turbo-check">Turbo</label><input type="range" id="turbo-steps" min="1" max="1000" step="1" value="1"><span class="val" id="turbo-steps-val">1</span></div>
+
+<div id="metrics"></div>
+
+<canvas class="sparkline-canvas" id="sparkline-canvas" width="296" height="80"></canvas>
+
+<div class="action-row"><button id="export-btn">Export</button><button id="import-btn">Import</button><button id="reset-policy-btn">Reset Policy</button></div>
+
+<div id="policy-banner"></div>
+
+</div></div></body>
+
 <script>
-// --- CONFIG PANEL ---
-const configToggle = document.getElementById('config-toggle');
-const configPanel = document.getElementById('config-panel');
-let configOpen = false;
 
-configToggle.addEventListener('click', () => {
-  configOpen = !configOpen;
-  configPanel.classList.toggle('open', configOpen);
-});
-
-const defaults = {
-  gravity: 27, flap: -510, vx: 270, birdR: 16,
-  spikeW: 30, spikeH: 24, candyR: 12, candyChance: 50,
-  wallBorder: 12, minSpike: 2, maxSpike: 3
+const PHYSICS_DEFAULTS = {
+  gravity: 1300, flapVelocity: -470, maxFallSpeed: 500, horizontalSpeed: 240,
+  jumpStyle: 'instant', impulseFrames: 9, birdRadius: 16,
+  spikeWidth: 30, spikeHeight: 24, spikeAngle: 0,
+  spikeCountMin: 2, spikeCountMax: 5, candyChance: 0.5,
+};
+const MODE = { HUMAN: 0, AI_TRAIN: 1, AI_PLAY: 2 };
+const WALL_BORDER = 12;
+const W = 540, H = 960;
+const SLOT_COUNT = 11;
+const SLOT_H = H / SLOT_COUNT;
+const PHYSICS_DT = 1/60;
+const PRESETS = {
+  Tuned:       {gravity:4200, flapVelocity:-700, maxFallSpeed:850, horizontalSpeed:290, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Balanced:    {gravity:2600, flapVelocity:-600, maxFallSpeed:750, horizontalSpeed:280, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Floaty:      {gravity:1300, flapVelocity:-470, maxFallSpeed:500, horizontalSpeed:240, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Twitchy:     {gravity:5000, flapVelocity:-620, maxFallSpeed:1000, horizontalSpeed:350, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  SpecLiteral: {gravity:1620, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Broken:      {gravity:27, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
 };
 
-let config = { ...defaults };
+let config = { ...PHYSICS_DEFAULTS };
 
-function syncSliderToNum(sliderId, numId) {
-  const slider = document.getElementById(sliderId);
-  const num = document.getElementById(numId);
-  slider.addEventListener('input', () => {
-    num.value = slider.value;
-  });
-  num.addEventListener('input', () => {
-    slider.value = num.value;
-  });
-}
+function configFromDefaults() { return { ...PHYSICS_DEFAULTS }; }
 
-function setupConfig(key, sliderId, numId, valId, displayFn) {
-  const slider = document.getElementById(sliderId);
-  const num = document.getElementById(numId);
-  const valEl = document.getElementById(valId);
-  syncSliderToNum(sliderId, numId);
-  slider.addEventListener('input', () => {
-    config[key] = parseFloat(slider.value);
-    valEl.textContent = displayFn(config[key]);
-  });
-  num.addEventListener('input', () => {
-    config[key] = parseFloat(num.value);
-    valEl.textContent = displayFn(config[key]);
-  });
-  valEl.textContent = displayFn(config[key]);
-}
-
-function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
-
-setupConfig('gravity', 'gravity-slider', 'gravity-num', 'gravity-val', v => clamp(v, 1, 80));
-setupConfig('flap', 'flap-slider', 'flap-num', 'flap-val', v => clamp(v, -1000, -100));
-setupConfig('vx', 'vx-slider', 'vx-num', 'vx-val', v => clamp(v, 50, 500));
-setupConfig('birdR', 'bird-r-slider', 'bird-r-num', 'bird-r-val', v => clamp(v, 8, 30));
-setupConfig('spikeW', 'spike-w-slider', 'spike-w-num', 'spike-w-val', v => clamp(v, 10, 60));
-setupConfig('spikeH', 'spike-h-slider', 'spike-h-num', 'spike-h-val', v => clamp(v, 10, 50));
-setupConfig('candyR', 'candy-r-slider', 'candy-r-num', 'candy-r-val', v => clamp(v, 6, 25));
-setupConfig('candyChance', 'candy-chance-slider', 'candy-chance-num', 'candy-chance-val', v => clamp(v, 0, 100));
-setupConfig('wallBorder', 'wall-border-slider', 'wall-border-num', 'wall-border-val', v => clamp(v, 5, 30));
-setupConfig('minSpike', 'min-spike-slider', 'min-spike-num', 'min-spike-val', v => clamp(v, 1, 5));
-setupConfig('maxSpike', 'max-spike-slider', 'max-spike-num', 'max-spike-val', v => clamp(v, 2, 6));
-
-document.getElementById('reset-btn').addEventListener('click', () => {
-  config = { ...defaults };
-  for (const key of Object.keys(defaults)) {
-    const slider = document.getElementById(key + '-slider');
-    const num = document.getElementById(key + '-num');
-    if (slider) slider.value = defaults[key];
-    if (num) num.value = defaults[key];
-  }
-  for (const key of Object.keys(defaults)) {
-    document.getElementById(key + '-val').textContent = defaults[key];
-  }
-});
-
-// --- GAME ---
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const W = 540, H = 960;
-const SLOT_H = H / 11;
-const WALL_BORDER = config.wallBorder;
-const CANDY_COLOR = '#f1c40f';
-const WALL_COLOR = '#95a5a6';
-const BIRD_COLOR = '#ff6b35';
-const SPIKE_COLOR = '#e74c3c';
-
-// Game State
-const START_MENU = 0, GAMEPLAY = 1, GAME_OVER = 2;
-let state = START_MENU;
-let score = 0;
-let highScore = parseInt(localStorage.getItem('dqts_highscore')) || 0;
-let candyCount = parseInt(localStorage.getItem('dqts_candies')) || 0;
-let screenShake = { x: 0, y: 0, frames: 0 };
-let gameOverAnim = { active: false, time: 0, birdY: 0, birdAngle: 0, whiteFlash: 0 };
-let particles = [];
-let bird = { x: W / 2, y: H / 2, vx: config.vx, vy: 0 };
-let rightWallSpikes = [];
-let leftWallSpikes = [];
-let rightWallHasSpikes = true;
-let candy = null;
-let gameTime = 0;
-let lastTime = 0;
-let scoreFlash = 0;
-
-function initGame() {
-  bird = { x: W / 2, y: H / 2, vx: config.vx, vy: 0 };
-  score = 0;
-  screenShake = { x: 0, y: 0, frames: 0 };
-  gameOverAnim = { active: false, time: 0, birdY: H / 2, birdAngle: 0, whiteFlash: 0 };
-  particles = [];
-  candy = null;
-  rightWallSpikes = [];
-  leftWallSpikes = [];
-  rightWallHasSpikes = true;
-  scoreFlash = 0;
-  initWalls();
-}
-
-function initWalls() {
-  rightWallSpikes = [];
-  leftWallSpikes = [];
-  rightWallHasSpikes = true;
-  spawnSpikeWall(leftWallSpikes, WALL_BORDER + 15);
-}
-
-function spawnSpikeWall(wallSpikes, x) {
-  wallSpikes = [];
-  const diff = score <= 5 ? [config.minSpike, config.maxSpike] : score <= 15 ? [3, 4] : [4, 5];
-  const count = diff[0] + Math.floor(Math.random() * (diff[1] - diff[0] + 1));
-  const availableSlots = [];
-  for (let i = 1; i < 10; i++) {
-    const hasSpike = wallSpikes.some(s => Math.floor(s.y / SLOT_H) === i);
-    if (!hasSpike) availableSlots.push(i);
-  }
-  const shuffled = availableSlots.sort(() => Math.random() - 0.5);
-  for (let i = 0; i < Math.min(count, shuffled.length); i++) {
-    const slot = shuffled[i];
-    const slotY = slot * SLOT_H + SLOT_H / 2;
-    wallSpikes.push({ x: x, y: slotY, dir: x >= W / 2 ? -1 : 1 });
-  }
-  return wallSpikes;
-}
-
-function spawnCandy() {
-  if (candy) return;
-  if (Math.random() > config.candyChance / 100) return;
-  const hasSpikes = rightWallHasSpikes ? rightWallSpikes : leftWallSpikes;
-  const x = rightWallHasSpikes ? W - WALL_BORDER - 40 : WALL_BORDER + 40;
-  const safeSlots = [];
-  for (let i = 1; i < 10; i++) {
-    const slotY = i * SLOT_H + SLOT_H / 2;
-    const hasSpike = hasSpikes.some(s => Math.floor(s.y / SLOT_H) === i);
-    if (!hasSpike) safeSlots.push(slotY);
-  }
-  if (safeSlots.length === 0) return;
-  const y = safeSlots[Math.floor(Math.random() * safeSlots.length)];
-  candy = { x, y, angle: 0 };
-}
-
-function addParticles(x, y, color, count, type) {
-  for (let i = 0; i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const speed = type === 'candy' ? 1.5 + Math.random() * 2 : 2 + Math.random() * 3;
-    particles.push({
-      x, y,
-      vx: Math.cos(angle) * speed,
-      vy: type === 'candy' ? -Math.random() * 3 - 1 : Math.sin(angle) * speed,
-      life: 1,
-      decay: 0.02 + Math.random() * 0.02,
-      size: type === 'candy' ? 3 + Math.random() * 3 : 4 + Math.random() * 4,
-      color,
-      type
-    });
-  }
-}
-
-function shakeScreen() {
-  screenShake = { x: (Math.random() - 0.5) * 10, y: (Math.random() - 0.5) * 10, frames: 8 };
-}
-
-function flap() {
-  if (state === START_MENU) {
-    state = GAMEPLAY;
-    initGame();
-    return;
-  }
-  if (state === GAME_OVER) {
-    state = GAMEPLAY;
-    initGame();
-    return;
-  }
-  if (state !== GAMEPLAY) return;
-  bird.vy = config.flap;
-  addParticles(bird.x, bird.y + config.birdR, WALL_COLOR, 6, 'wall');
-}
-
-document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); flap(); } });
-canvas.addEventListener('click', flap);
-canvas.addEventListener('touchstart', e => { e.preventDefault(); flap(); });
-
-function checkSpikeCollision() {
-  const spikes = [...rightWallSpikes, ...leftWallSpikes];
-  for (const s of spikes) {
-    if (bird.x + config.birdR > s.x - config.spikeW / 2 && bird.x - config.birdR < s.x + config.spikeW / 2 &&
-        bird.y + config.birdR > s.y - config.spikeH && bird.y - config.birdR < s.y) {
-      return true;
+function loadConfig() {
+  try {
+    const saved = localStorage.getItem('dtts_physics');
+    if (saved) {
+      const p = JSON.parse(saved);
+      if (p && typeof p.gravity === 'number') {
+        for (const k of Object.keys(PHYSICS_DEFAULTS)) {
+          if (p[k] !== undefined) config[k] = p[k];
+        }
+        return true;
+      }
     }
-  }
+  } catch(e) {}
   return false;
 }
 
-function checkCandyCollection() {
-  if (!candy) return;
-  const dx = bird.x - candy.x, dy = bird.y - candy.y;
-  if (Math.sqrt(dx * dx + dy * dy) < config.birdR + config.candyR) {
-    candyCount++;
-    localStorage.setItem('dqts_candies', candyCount);
-    addParticles(candy.x, candy.y, CANDY_COLOR, 10, 'candy');
-    candy = null;
+function saveConfig() {
+  try { localStorage.setItem('dtts_physics', JSON.stringify(config)); } catch(e) {}
+}
+
+function hashConfig(c) {
+  return Object.keys(c).sort().map(k => k + '=' + c[k]).join('|');
+}
+
+function initGame() {
+  bird = { x: W/2, y: H/2, vy: 0, vx: config.horizontalSpeed, alive: true };
+  score = 0;
+  spikes = [];
+  candy = null;
+  particles = [];
+  scoreFlash = 0;
+  gameOverAnim = { birdY: bird.y, alpha: 0, spin: 0 };
+  gameMode = MODE.HUMAN;
+  resetState();
+}
+
+function resetState() {
+  bird.vy = 0;
+  bird.vx = config.horizontalSpeed;
+  bird.alive = true;
+  candy = null;
+  particles = [];
+  scoreFlash = 0;
+  gameOverAnim = { birdY: bird.y, alpha: 0, spin: 0 };
+  spawnSpikeWall(WALL_BORDER + 15);
+  spawnCandy();
+  spawnCapSpikes();
+}
+
+function spawnSpikeWall(x) {
+  spikes = [];
+  const count = Math.max(config.spikeCountMin, Math.min(config.spikeCountMax, config.spikeCountMin + Math.floor(Math.random() * 4)));
+  const occupied = new Set();
+  for (let i = 0; i < count; i++) {
+    let slot;
+    let attempts = 0;
+    do {
+      slot = Math.floor(Math.random() * SLOT_COUNT);
+      attempts++;
+    } while (occupied.has(slot) && attempts < 50);
+    if (occupied.has(slot)) continue;
+    occupied.add(slot);
+    const dir = x < W/2 ? 1 : -1;
+    spikes.push({ x, y: SLOT_H * slot + SLOT_H/2, dir, width: config.spikeWidth, height: config.spikeHeight, angle: config.spikeAngle });
   }
 }
 
-function checkWallCollision() {
-  if (bird.x + config.birdR > W - WALL_BORDER) {
-    bird.x = W - WALL_BORDER - config.birdR;
-    bird.vx = -config.vx;
-    shakeScreen();
-    addParticles(bird.x + config.birdR, bird.y, WALL_COLOR, 6, 'wall');
-    scoreFlash = 1;
+function spawnCapSpikes() {
+  capSpikes = [];
+  for (let i = 0; i < Math.floor(W / config.spikeWidth); i++) {
+    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: WALL_BORDER + config.spikeHeight, dir: 1, width: config.spikeWidth, height: config.spikeHeight });
+    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: H - WALL_BORDER - config.spikeHeight, dir: -1, width: config.spikeWidth, height: config.spikeHeight });
+  }
+}
+
+function spawnCandy() {
+  if (candy && !candy.collected) return;
+  candy = null;
+  if (Math.random() > config.candyChance) return;
+  const occupied = new Set();
+  for (const s of spikes) occupied.add(Math.round(s.y / SLOT_H));
+  let slot;
+  let attempts = 0;
+  do {
+    slot = Math.floor(Math.random() * SLOT_COUNT);
+    attempts++;
+  } while (occupied.has(slot) && attempts < 50);
+  if (occupied.has(slot)) return;
+  const cx = spikes.some(s => s.dir === 1) ? WALL_BORDER + 15 : W - WALL_BORDER - 15;
+  candy = { x: cx, y: SLOT_H * slot + SLOT_H/2, r: 8, collected: false, angle: 0 };
+}
+
+let capSpikes = [];
+let bird = null;
+let score = 0;
+let spikes = [];
+let candy = null;
+let particles = [];
+let scoreFlash = 0;
+let gameOverAnim = { birdY: 0, alpha: 0, spin: 0 };
+let gameMode = MODE.HUMAN;
+
+
+function updatePhysics(dt) {
+  if (!bird.alive) return;
+
+  // Horizontal movement
+  bird.x += bird.vx * dt;
+
+  // Apply gravity
+  bird.vy += config.gravity * dt;
+  bird.vy = Math.min(bird.vy, config.maxFallSpeed);
+
+  // Move bird
+  bird.y += bird.vy * dt;
+
+  // Ceiling/floor cap spikes collision
+  for (const s of capSpikes) {
+    if (capSpikeHit(s)) {
+      gameOver();
+      return;
+    }
+  }
+
+  // Wall collision - bounce
+  if (bird.x - config.birdRadius < WALL_BORDER) {
+    bird.x = WALL_BORDER + config.birdRadius;
     score++;
-    rightWallHasSpikes = false;
-    rightWallSpikes = spawnSpikeWall([], WALL_BORDER + 15);
+    scoreFlash = 1;
+    shakeScreen();
+    bird.vx = Math.abs(bird.vx);
+    spawnSpikeWall(WALL_BORDER + 15);
+    spawnCandy();
+  } else if (bird.x + config.birdRadius > W - WALL_BORDER) {
+    bird.x = W - WALL_BORDER - config.birdRadius;
+    score++;
+    scoreFlash = 1;
+    shakeScreen();
+    bird.vx = -Math.abs(bird.vx);
+    spawnSpikeWall(W - WALL_BORDER - 15);
     spawnCandy();
   }
-  if (bird.x - config.birdR < WALL_BORDER) {
-    bird.x = WALL_BORDER + config.birdR;
-    bird.vx = config.vx;
-    shakeScreen();
-    addParticles(bird.x - config.birdR, bird.y, WALL_COLOR, 6, 'wall');
-    scoreFlash = 1;
-    score++;
-    rightWallHasSpikes = true;
-    rightWallSpikes = spawnSpikeWall([], W - WALL_BORDER - 15);
-    spawnCandy();
+
+  // Wall spike collision
+  for (const s of spikes) {
+    if (wallSpikeHit(s)) {
+      gameOver();
+      return;
+    }
   }
-  if (bird.y - config.birdR < config.spikeH) {
-    bird.y = config.spikeH + config.birdR;
-    bird.vy = Math.abs(bird.vy) * 0.5;
+
+  // Candy collision
+  if (candy && !candy.collected) {
+    const dx = bird.x - candy.x;
+    const dy = bird.y - candy.y;
+    if (Math.sqrt(dx*dx + dy*dy) < config.birdRadius + candy.r) {
+      candy.collected = true;
+      score += 5;
+      scoreFlash = 1;
+      for (let i = 0; i < 12; i++) {
+        particles.push({ x: candy.x, y: candy.y, vx: (Math.random()-0.5)*200, vy: (Math.random()-0.5)*200, life: 1, decay: 1.5, type: 'candy', r: 3 });
+      }
+    }
   }
-  if (bird.y + config.birdR > H - config.spikeH) {
-    bird.y = H - config.spikeH - config.birdR;
-    bird.vy = -Math.abs(bird.vy) * 0.5;
+}
+
+function wallSpikeHit(s) {
+  const dir = s.dir;
+  const depth = (bird.x - s.x) * dir;
+  if (depth + config.birdRadius < 0 || depth - config.birdRadius > s.height) return false;
+  const d = Math.max(0, Math.min(depth - config.birdRadius, s.height - config.birdRadius));
+  const angleRad = s.angle * Math.PI / 180;
+  const apexOffset = Math.tan(angleRad) * s.height;
+  const halfH = (s.width / 2) * (1 - d / s.height) + Math.abs(apexOffset) * (1 - d / s.height) * 0.5;
+  const dy = bird.y - s.y;
+  return Math.abs(dy) < halfH + config.birdRadius;
+}
+
+function capSpikeHit(s) {
+  const dy = bird.y - s.y;
+  if (s.dir < 0) {
+    if (dy + config.birdRadius < -s.height || dy - config.birdRadius > 0) return false;
+    const d = Math.max(0, Math.min(dy - config.birdRadius, s.height - config.birdRadius));
+    const halfW = (s.width / 2) * (1 - d / s.height);
+    const dx = bird.x - s.x;
+    return Math.abs(dx) < halfW + config.birdRadius;
+  } else {
+    if (dy + config.birdRadius < 0 || dy - config.birdRadius > s.height) return false;
+    const d = Math.max(0, Math.min(dy - config.birdRadius, s.height - config.birdRadius));
+    const halfW = (s.width / 2) * (1 - d / s.height);
+    const dx = bird.x - s.x;
+    return Math.abs(dx) < halfW + config.birdRadius;
   }
 }
 
 function gameOver() {
-  state = GAME_OVER;
-  gameOverAnim = { active: true, time: 0, birdY: bird.y, birdAngle: 0, whiteFlash: 1 };
-  if (score > highScore) {
-    highScore = score;
-    localStorage.setItem('dqts_highscore', highScore);
-  }
+  bird.alive = false;
+  gameOverAnim.birdY = bird.y;
+  gameOverAnim.alpha = 0;
+  gameOverAnim.spin = 0;
+  shakeScreen();
 }
 
-function update(dt) {
-  if (state === START_MENU) {
-    bird.y = H / 2 + Math.sin(gameTime * 2) * 15;
-    return;
-  }
-  if (state === GAME_OVER) {
-    gameOverAnim.time += dt;
-    gameOverAnim.whiteFlash *= 0.95;
-    if (gameOverAnim.time < 0.5) {
-      gameOverAnim.birdAngle += 10 * dt;
-    } else {
-      gameOverAnim.birdY += 8 * dt;
-    }
-    return;
-  }
-  scoreFlash *= 0.9;
-  bird.vy += config.gravity * dt;
-  bird.x += bird.vx * dt;
-  bird.y += bird.vy * dt;
-  checkWallCollision();
-  if (checkSpikeCollision()) {
-    gameOver();
-    return;
-  }
-  checkCandyCollection();
-  particles = particles.filter(p => {
-    p.x += p.vx;
-    p.y += p.vy;
-    if (p.type === 'candy') p.vy -= 0.05;
-    p.life -= p.decay;
-    return p.life > 0;
-  });
-  if (screenShake.frames > 0) {
-    screenShake.frames--;
-    if (screenShake.frames <= 0) {
-      screenShake = { x: 0, y: 0, frames: 0 };
-    }
-  }
-  if (candy) candy.angle += 0.03;
-  gameTime += dt;
+function shakeScreen() {
+  shakeFrames = 8;
+  shakeX = (Math.random() - 0.5) * 10;
+  shakeY = (Math.random() - 0.5) * 10;
 }
 
-function drawSpike(x, y, dir) {
-  ctx.fillStyle = SPIKE_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(x - config.spikeW / 2, y + dir * config.spikeH / 2);
-  ctx.lineTo(x + config.spikeW / 2, y + dir * config.spikeH / 2);
-  ctx.lineTo(x, y - dir * config.spikeH / 2);
-  ctx.closePath();
-  ctx.fill();
-}
+let shakeFrames = 0, shakeX = 0, shakeY = 0;
 
-function drawBird(x, y, vx) {
-  const dir = vx > 0 ? 1 : -1;
-  ctx.fillStyle = BIRD_COLOR;
-  ctx.beginPath();
-  ctx.arc(x, y, config.birdR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(x + dir * 5, y - 4, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(x + dir * 7, y - 4, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#f39c12';
-  ctx.beginPath();
-  ctx.moveTo(x + dir * 16, y - 1);
-  ctx.lineTo(x + dir * 24, y + 2);
-  ctx.lineTo(x + dir * 16, y + 5);
-  ctx.closePath();
-  ctx.fill();
-}
 
-function drawCandy(x, y, angle) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
-  ctx.fillStyle = CANDY_COLOR;
-  ctx.beginPath();
-  ctx.moveTo(0, -config.candyR);
-  ctx.lineTo(config.candyR, 0);
-  ctx.lineTo(0, config.candyR);
-  ctx.lineTo(-config.candyR, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
 
 function draw() {
   ctx.save();
-  if (screenShake.frames > 0) {
-    ctx.translate(screenShake.x, screenShake.y);
-  }
-  ctx.fillStyle = '#ecef1';
+  ctx.translate(shakeFrames > 0 ? shakeX : 0, shakeFrames > 0 ? shakeY : 0);
+  ctx.fillStyle = '#ecf0f1';
   ctx.fillRect(-10, -10, W + 20, H + 20);
-  if (state === GAMEPLAY) {
-    ctx.fillStyle = 'rgba(0,0,0,0.04)';
-    ctx.font = 'bold 180px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(score, W / 2, H / 2);
+
+  // Wall borders
+  ctx.fillStyle = '#34495e';
+  ctx.fillRect(0, 0, WALL_BORDER, H);
+  ctx.fillRect(W - WALL_BORDER, 0, WALL_BORDER, H);
+
+  // Ceiling and floor
+  ctx.fillRect(0, 0, W, WALL_BORDER);
+  ctx.fillRect(0, H - WALL_BORDER, W, WALL_BORDER);
+
+  // Cap spikes
+  for (const s of capSpikes) {
+    drawCapSpike(s);
   }
-  if (scoreFlash > 0.1) {
-    ctx.fillStyle = `rgba(39, 174, 96, ${scoreFlash * 0.15})`;
-    ctx.fillRect(-10, -10, W + 20, H + 20);
-  }
-  const spikes = rightWallHasSpikes ? rightWallSpikes : leftWallSpikes;
+
+  // Wall spikes
   for (const s of spikes) {
-    drawSpike(s.x, s.y, s.dir);
+    drawWallSpike(s);
   }
-  const oppositeSpikes = rightWallHasSpikes ? leftWallSpikes : rightWallSpikes;
-  for (const s of oppositeSpikes) {
-    drawSpike(s.x, s.y, s.dir);
+
+  // Candy
+  if (candy && !candy.collected) {
+    drawCandy();
   }
-  ctx.strokeStyle = WALL_COLOR;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(WALL_BORDER, 0);
-  ctx.lineTo(WALL_BORDER, H);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(W - WALL_BORDER, 0);
-  ctx.lineTo(W - WALL_BORDER, H);
-  ctx.stroke();
-  if (candy) drawCandy(candy.x, candy.y, candy.angle);
+
+  // Bird
+  if (bird) {
+    drawBird();
+  }
+
+  // Particles
   for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    if (p.type === 'candy') {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-    }
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.type === 'candy' ? '#ffeb3b' : '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
-  if (state === GAME_OVER) {
+
+  // Score flash
+  if (scoreFlash > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (scoreFlash * 0.4) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Score watermark
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  ctx.font = 'bold 120px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(score), W/2, H/2);
+
+  // Game over overlay
+  if (!bird || !bird.alive) {
+    gameOverAnim.alpha = Math.min(1, gameOverAnim.alpha + 0.02);
+    ctx.fillStyle = 'rgba(0,0,0,' + (gameOverAnim.alpha * 0.6) + ')';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 36px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText('Game Over', W/2, H/2 - 80);
+    ctx.font = '24px Segoe UI';
+    ctx.fillText('Score: ' + score, W/2, H/2 - 30);
+
+    // Animated bird
     ctx.save();
-    ctx.translate(W / 2, gameOverAnim.birdY);
-    ctx.rotate(gameOverAnim.birdAngle);
-    drawBird(0, 0, 1);
-    ctx.restore();
-  } else if (state === START_MENU) {
-    drawBird(bird.x, bird.y, bird.vx);
-  } else {
-    drawBird(bird.x, bird.y, bird.vx);
-  }
-  if (state === START_MENU) {
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 48px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText("DON'T TOUCH", W / 2, H / 2 - 80);
-    ctx.fillText("THE SPIKES", W / 2, H / 2 - 30);
-    ctx.font = 'bold 36px Arial';
-    ctx.fillStyle = '#f1c40f';
-    ctx.fillText("HIGH: " + highScore, W / 2, H / 2 + 30);
-    ctx.font = '24px Arial';
-    ctx.fillStyle = '#fff';
-    const pulse = Math.sin(gameTime * 3) * 0.3 + 0.7;
-    ctx.globalAlpha = pulse;
-    ctx.fillText("Tap to Jump", W / 2, H / 2 + 90);
-    ctx.globalAlpha = 1;
-  }
-  if (state === GAME_OVER) {
-    ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(0, 0, W, H);
-    const cardW = 340, cardH = 260;
-    const cardX = W / 2 - cardW / 2, cardY = H / 2 - cardH / 2;
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 20;
-    ctx.beginPath();
-    ctx.roundRect(cardX, cardY, cardW, cardH, 16);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = '#2c3e50';
-    ctx.font = 'bold 36px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText("GAME OVER", W / 2, cardY + 50);
-    ctx.font = '28px Arial';
+    ctx.translate(W/2, gameOverAnim.birdY);
+    ctx.rotate(gameOverAnim.spin);
     ctx.fillStyle = '#e74c3c';
-    ctx.fillText("Score: " + score, W / 2, cardY + 100);
-    ctx.font = '22px Arial';
-    ctx.fillStyle = '#2c3e50';
-    ctx.fillText("Best: " + highScore, W / 2, cardY + 140);
-    ctx.fillText("Candies: " + candyCount, W / 2, cardY + 175);
-    const btnW = 200, btnH = 45;
-    const btnX = W / 2 - btnW / 2, btnY = cardY + cardH - 60;
-    const hover = Math.sin(gameTime * 4) * 2;
-    ctx.fillStyle = '#27ae60';
     ctx.beginPath();
-    ctx.roundRect(btnX, btnY + hover, btnW, btnH, 8);
+    ctx.arc(0, 0, 14, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 22px Arial';
-    ctx.fillText("Play Again", W / 2, btnY + btnH / 2 + hover);
+    ctx.restore();
+
+    // Play Again button
+    if (gameOverAnim.alpha >= 0.6) {
+      ctx.fillStyle = '#4fc3f7';
+      ctx.font = '20px Segoe UI';
+      ctx.fillText('Tap to Play Again', W/2, H/2 + 60);
+    }
+    ctx.restore();
+    return;
   }
+
+  // AI decision indicator
+  if (gameMode !== MODE.HUMAN && bird.alive) {
+    if (aiFlashFrame > 0) {
+      ctx.strokeStyle = 'rgba(79,195,247,' + (aiFlashFrame * 0.8) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(bird.x, bird.y, config.birdRadius + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      aiFlashFrame -= 0.05;
+    }
+  }
+
   ctx.restore();
 }
 
-function gameLoop(timestamp) {
-  if (!lastTime) lastTime = timestamp;
-  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
-  lastTime = timestamp;
-  gameTime += dt;
-  update(dt);
-  draw();
-  requestAnimationFrame(gameLoop);
+function drawWallSpike(s) {
+  const angleRad = s.angle * Math.PI / 180;
+  const apexOffset = Math.tan(angleRad) * s.height;
+  ctx.fillStyle = '#e74c3c';
+  ctx.beginPath();
+  const baseX = s.x;
+  const baseTopY = s.y - s.width / 2;
+  const baseBotY = s.y + s.width / 2;
+  const apexX = s.x + s.dir * s.height;
+  const apexY = s.y + apexOffset;
+  ctx.moveTo(baseX, baseTopY);
+  ctx.lineTo(baseX, baseBotY);
+  ctx.lineTo(apexX, apexY);
+  ctx.closePath();
+  ctx.fill();
 }
 
+function drawCapSpike(s) {
+  ctx.fillStyle = '#e74c3c';
+  ctx.beginPath();
+  ctx.moveTo(s.x - s.width / 2, s.y);
+  ctx.lineTo(s.x + s.width / 2, s.y);
+  ctx.lineTo(s.x, s.y + s.dir * s.height);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBird() {
+  ctx.fillStyle = '#3498db';
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, config.birdRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#2980b9';
+  ctx.beginPath();
+  ctx.arc(bird.x, bird.y, config.birdRadius * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCandy() {
+  if (!candy || candy.collected) return;
+  candy.angle += 0.05;
+  const pulse = 1 + Math.sin(candy.angle * 3) * 0.15;
+  ctx.fillStyle = '#ffeb3b';
+  ctx.beginPath();
+  ctx.arc(candy.x, candy.y, candy.r * pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#f57f17';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+let aiFlashFrame = 0;
+
+
+// Tabular Q-learning agent
+let qTable = null;
+let aiEpsilon = 1.0;
+let aiAlpha = 0.15;
+let aiGamma = 0.98;
+let aiEpisode = 0;
+let aiTotalSteps = 0;
+let aiCurrentScore = 0;
+let aiBestScore = 0;
+let aiScores = [];
+let aiStatesVisited = new Set();
+let trainedPhysicsHash = null;
+let aiTargetBucket = null;
+let aiLastAction = -1;
+
+const Q_BUCKETS = {
+  dxBuckets: 12,
+  dyBuckets: [8,24,48,80,128,192,288,480],
+  vyBuckets: [60,180,360,600],
+  spikeBuckets: [8,24,48,80,128,192,288,480],
+};
+
+function initQTable() {
+  const sizes = [Q_BUCKETS.dxBuckets, 17, 9, 9, 2];
+  const total = sizes.reduce((a,b) => a*b, 1);
+  qTable = new Float32Array(total);
+  aiStatesVisited = new Set();
+}
+
+function mixRadixKey(dx, dy, vy, ds, dir) {
+  const sizes = [Q_BUCKETS.dxBuckets, 17, 9, 9, 2];
+  return dx + dy*sizes[0] + vy*sizes[0]*sizes[1] + ds*sizes[0]*sizes[1]*sizes[2] + dir*sizes[0]*sizes[1]*sizes[2]*sizes[3];
+}
+
+function dxBucket() {
+  const dist = gameMode === MODE.AI_PLAY || gameMode === MODE.AI_TRAIN ?
+    (bird.vx > 0 ? W - WALL_BORDER - 12 - bird.x : bird.x - WALL_BORDER - 12) :
+    (bird.vx > 0 ? W - WALL_BORDER - 12 - bird.x : bird.x - WALL_BORDER - 12);
+  return Math.max(0, Math.min(Q_BUCKETS.dxBuckets - 1, Math.floor(dist / (W - 2*WALL_BORDER) * Q_BUCKETS.dxBuckets)));
+}
+
+function clampBucket(val, thresholds) {
+  if (val < -480) return 0;
+  if (val > 480) return thresholds.length + 1;
+  for (let i = 0; i < thresholds.length; i++) {
+    if (val < -thresholds[i]) return thresholds.length - i;
+    if (val > thresholds[i]) return thresholds.length + i + 1;
+  }
+  return thresholds.length;
+}
+
+function dyBucket() {
+  const target = aiTargetBucket || 0;
+  const targetY = SLOT_H * target + SLOT_H/2;
+  const dist = bird.y - targetY;
+  return clampBucket(dist, Q_BUCKETS.dyBuckets);
+}
+
+function vyBucket() {
+  const clamped = Math.max(-900, Math.min(900, bird.vy));
+  const absVal = Math.abs(clamped);
+  const thresholds = Q_BUCKETS.vyBuckets;
+  for (let i = 0; i < thresholds.length; i++) {
+    if (absVal <= thresholds[i]) return i;
+  }
+  return thresholds.length;
+}
+
+function dySpikeBucket() {
+  let minDist = Infinity;
+  for (const s of spikes) {
+    const dist = Math.abs(bird.y - s.y);
+    if (dist < minDist) minDist = dist;
+  }
+  return clampBucket(minDist, Q_BUCKETS.spikeBuckets);
+}
+
+function dirBit() {
+  return bird.vx > 0 ? 1 : 0;
+}
+
+function getStateKey() {
+  const dx = dxBucket();
+  const dy = dyBucket();
+  const vy = vyBucket();
+  const ds = dySpikeBucket();
+  const d = dirBit();
+  aiStatesVisited.add(mixRadixKey(dx, dy, vy, ds, d));
+  return mixRadixKey(dx, dy, vy, ds, d);
+}
+
+function getBestAction(state) {
+  const base = state;
+  const a0 = qTable[base];
+  const a1 = qTable[base + 1];
+  return a1 >= a0 ? 1 : 0;
+}
+
+function chooseAction(state) {
+  if (aiEpsilon > Math.random()) return Math.random() < 0.5 ? 0 : 1;
+  return getBestAction(state);
+}
+
+function updateQ(state, action, reward, nextState, done) {
+  if (done) {
+    qTable[state + action] += aiAlpha * (reward - qTable[state + action]);
+  } else {
+    const bestNext = getBestAction(nextState);
+    const target = reward + aiGamma * qTable[nextState + bestNext];
+    qTable[state + action] += aiAlpha * (target - qTable[state + action]);
+  }
+}
+
+function computeEpsilon() {
+  if (aiEpisode < 1500) {
+    return Math.max(0.02, Math.exp(-aiEpisode / 1500));
+  }
+  return 0.02;
+}
+
+function updateAI() {
+  if (!qTable) initQTable();
+  if (!bird.alive) return;
+
+  const state = getStateKey();
+  const action = chooseAction(state);
+  aiLastAction = action;
+
+  updatePhysics(PHYSICS_DT);
+
+  let reward = 0.1;
+  let done = false;
+
+  if (!bird.alive) {
+    reward = -100;
+    done = true;
+  } else if (bird.vx > 0 && bird.x + config.birdRadius > W - WALL_BORDER) {
+    reward = 10;
+  } else if (bird.vx < 0 && bird.x - config.birdRadius < WALL_BORDER) {
+    reward = 10;
+  }
+
+  if (candy && !candy.collected) {
+    const dx2 = bird.x - candy.x;
+    const dy2 = bird.y - candy.y;
+    if (Math.sqrt(dx2*dx2 + dy2*dy2) < config.birdRadius + candy.r) {
+      reward += 5;
+    }
+  }
+
+  const nextState = getStateKey();
+  updateQ(state, action, reward, nextState, done);
+
+  if (done) {
+    aiCurrentScore = 0;
+    aiEpisode++;
+    aiScores.push(aiCurrentScore);
+    if (aiCurrentScore > aiBestScore) aiBestScore = aiCurrentScore;
+    aiEpsilon = computeEpsilon();
+    aiTargetBucket = null;
+    aiLastAction = -1;
+  } else {
+    aiCurrentScore++;
+    aiTotalSteps++;
+  }
+
+  aiFlashFrame = action === 1 ? 1 : 0;
+}
+
+function resetAI() {
+  aiCurrentScore = 0;
+  aiTargetBucket = null;
+  aiLastAction = -1;
+}
+
+// Save/load Q-table
+function saveQTable() {
+  try {
+    localStorage.setItem('dtts_qtable', JSON.stringify({
+      physics: hashConfig(config),
+      episode: aiEpisode,
+      data: Array.from(qTable)
+    }));
+  } catch(e) {}
+}
+
+function loadQTable() {
+  try {
+    const saved = localStorage.getItem('dtts_qtable');
+    if (saved) {
+      const p = JSON.parse(saved);
+      if (p && p.physics && p.data) {
+        trainedPhysicsHash = p.physics;
+        aiEpisode = p.episode || 0;
+        if (p.data.length === qTable.length) {
+          qTable = new Float32Array(p.data);
+        } else {
+          initQTable();
+        }
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+}
+
+function exportPolicy() {
+  const data = { physics: hashConfig(config), episode: aiEpisode, data: Array.from(qTable) };
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dtts_policy.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importPolicy(data) {
+  try {
+    const p = JSON.parse(data);
+    if (p && p.physics && p.data) {
+      trainedPhysicsHash = p.physics;
+      aiEpisode = p.episode || 0;
+      qTable = new Float32Array(p.data);
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function resetPolicy() {
+  if (confirm('Reset the Q-table?')) {
+    initQTable();
+    localStorage.removeItem('dtts_qtable');
+    trainedPhysicsHash = null;
+  }
+}
+
+
+function updateDerivedValues() {
+  const jumpH = config.flapVelocity * config.flapVelocity / (2 * config.gravity);
+  const apexTime = Math.abs(config.flapVelocity) / config.gravity;
+  const hPerJump = config.horizontalSpeed * 2 * apexTime;
+  const crossTime = (W - 2*WALL_BORDER) / config.horizontalSpeed;
+  const tapsPerCross = crossTime / (2 * apexTime);
+  const terminalTime = config.maxFallSpeed / config.gravity;
+  const terminalDist = config.maxFallSpeed * config.maxFallSpeed / (2 * config.gravity);
+  const clearance = SLOT_H - config.spikeWidth - 2 * config.birdRadius;
+
+  const el = document.getElementById('derived');
+  el.innerHTML = '';
+
+  const rows = [
+    ['Jump height', formatVal(jumpH, 'px', jumpH > 300 ? 'amber' : (jumpH > 960 ? 'red' : 'green'))],
+    ['Time to apex', formatVal(apexTime, 's')],
+    ['H travel/jump', formatVal(hPerJump, 'px')],
+    ['Crossing time', formatVal(crossTime, 's')],
+    ['Taps/crossing', formatVal(tapsPerCross, '', tapsPerCross < 2 ? 'red' : (tapsPerCross > 8 ? 'amber' : 'green'))],
+    ['Terminal vel time', formatVal(terminalTime, 's')],
+    ['Terminal fall dist', formatVal(terminalDist, 'px')],
+    ['Gap clearance', formatVal(clearance, 'px', clearance <= 0 ? 'red-bg' : 'green')],
+  ];
+
+  for (const [label, val] of rows) {
+    el.innerHTML += '<div class="derived-row"><span class="label">' + label + '</span><span class="value ' + val[1] + '">' + val[0] + '</span></div>';
+  }
+}
+
+function formatVal(v, unit, cls) {
+  if (typeof v === 'string') return [v, cls];
+  const s = v.toFixed(1);
+  return [s + (unit ? ' ' + unit : ''), cls];
+}
+
+function buildSliders() {
+  const params = [
+    ['gravity', 'Gravity', 200, 5000, 10],
+    ['flapVelocity', 'Flap Vel', -1200, -100, 5],
+    ['maxFallSpeed', 'Max Fall', 150, 2000, 10],
+    ['horizontalSpeed', 'H-Speed', 60, 900, 5],
+    ['impulseFrames', 'Impulse Frames', 1, 20, 1],
+    ['birdRadius', 'Bird Radius', 6, 40, 1],
+    ['spikeWidth', 'Spike Width', 10, 60, 1],
+    ['spikeHeight', 'Spike Height', 8, 60, 1],
+    ['spikeAngle', 'Spike Angle', -45, 45, 1],
+    ['spikeCountMin', 'Min Spikes', 0, 9, 1],
+    ['spikeCountMax', 'Max Spikes', 0, 9, 1],
+    ['candyChance', 'Candy Chance', 0, 1, 0.05],
+  ];
+
+  const el = document.getElementById('sliders');
+  for (const [key, label, min, max, step] of params) {
+    const val = config[key];
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    row.innerHTML = '<label>' + label + '</label>';
+    row.innerHTML += '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
+    row.innerHTML += '<input type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
+    row.innerHTML += '<span class="val">' + val.toFixed(step < 1 ? 2 : 0) + '</span>';
+    el.appendChild(row);
+  }
+}
+
+function buildPresets() {
+  const el = document.getElementById('presets');
+  for (const name of Object.keys(PRESETS)) {
+    const btn = document.createElement('button');
+    btn.textContent = name;
+    btn.onclick = () => applyPreset(name);
+    el.appendChild(btn);
+  }
+}
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  for (const k of Object.keys(p)) config[k] = p[k];
+  updateSliderDisplays();
+  saveConfig();
+  updateDerivedValues();
+}
+
+function updateSliderDisplays() {
+  const sliders = document.querySelectorAll('#sliders input[type=range]');
+  const inputs = document.querySelectorAll('#sliders input[type=number]');
+  const vals = document.querySelectorAll('#sliders .val');
+  for (let i = 0; i < sliders.length; i++) {
+    const key = sliders[i].dataset.key;
+    sliders[i].value = config[key];
+    inputs[i].value = config[key];
+    vals[i].textContent = config[key].toFixed(sliders[i].step < 1 ? 2 : 0);
+  }
+}
+
+function clampSliders() {
+  const min = parseInt(document.querySelector('#sliders input[data-key="spikeCountMin"]').value);
+  const max = parseInt(document.querySelector('#sliders input[data-key="spikeCountMax"]').value);
+  if (min > max) {
+    document.querySelector('#sliders input[data-key="spikeCountMin"]').value = max;
+    config.spikeCountMin = max;
+  }
+  if (max < min) {
+    document.querySelector('#sliders input[data-key="spikeCountMax"]').value = min;
+    config.spikeCountMax = min;
+  }
+}
+
+function updateMetrics() {
+  const el = document.getElementById('metrics');
+  if (!el) return;
+  el.innerHTML = '';
+  const metrics = [
+    ['Episode', aiEpisode],
+    ['Total steps', aiTotalSteps],
+    ['Epsilon', aiEpsilon.toFixed(3)],
+    ['Score', aiCurrentScore],
+    ['Best', aiBestScore],
+    ['States visited', aiStatesVisited.size],
+  ];
+  if (aiScores.length > 0) {
+    const last50 = aiScores.slice(-50);
+    const mean = last50.reduce((a,b) => a+b, 0) / last50.length;
+    metrics.push(['Mean (50)', mean.toFixed(1)]);
+  }
+  for (const [label, val] of metrics) {
+    el.innerHTML += '<div class="metric">' + label + ': <span class="metric-val">' + val + '</span></div>';
+  }
+}
+
+function drawSparkline() {
+  const el = document.getElementById('sparkline-canvas');
+  if (!el) return;
+  const c = el.getContext('2d');
+  const w = el.width, h = el.height;
+  c.clearRect(0, 0, w, h);
+  if (aiScores.length < 2) return;
+
+  const maxScore = Math.max(5, ...aiScores.slice(-200));
+  const step = w / Math.max(1, aiScores.length - 1);
+
+  // Raw scores
+  c.strokeStyle = 'rgba(79,195,247,0.2)';
+  c.lineWidth = 1;
+  c.beginPath();
+  for (let i = 0; i < aiScores.length; i++) {
+    const x = i * step;
+    const y = h - (aiScores[i] / maxScore) * h * 0.9;
+    if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+  }
+  c.stroke();
+
+  // Moving average
+  const window = 50;
+  if (aiScores.length >= window) {
+    c.strokeStyle = 'rgba(79,195,247,0.9)';
+    c.lineWidth = 2;
+    c.beginPath();
+    for (let i = window - 1; i < aiScores.length; i++) {
+      let sum = 0;
+      for (let j = i - window + 1; j <= i; j++) sum += aiScores[j];
+      const avg = sum / window;
+      const x = i * step;
+      const y = h - (avg / maxScore) * h * 0.9;
+      if (i === window - 1) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.stroke();
+  }
+}
+
+function checkPolicyBanner() {
+  const banner = document.getElementById('policy-banner');
+  if (!banner) return;
+  if (trainedPhysicsHash && trainedPhysicsHash !== hashConfig(config)) {
+    banner.innerHTML = '<div class="banner amber">Policy was trained under different physics — expect degraded play. Retrain or reset.</div>';
+  } else {
+    banner.innerHTML = '';
+  }
+}
+
+let prevMode = null;
+
+function switchMode(newMode) {
+  if (newMode === prevMode) return;
+  prevMode = newMode;
+  document.getElementById('mode-human').classList.toggle('active', newMode === MODE.HUMAN);
+  document.getElementById('mode-ai-train').classList.toggle('active', newMode === MODE.AI_TRAIN);
+  document.getElementById('mode-ai-play').classList.toggle('active', newMode === MODE.AI_PLAY);
+  document.getElementById('ai-section').style.display = newMode === MODE.HUMAN ? 'none' : 'block';
+  gameMode = newMode;
+  if (newMode === MODE.AI_TRAIN || newMode === MODE.AI_PLAY) {
+    if (!qTable) initQTable();
+  }
+}
+
+function gameLoop(timestamp) {
+  requestAnimationFrame(gameLoop);
+
+  if (shakeFrames > 0) {
+    shakeFrames--;
+    shakeX = (Math.random() - 0.5) * 10;
+    shakeY = (Math.random() - 0.5) * 10;
+  }
+
+  if (gameMode === MODE.HUMAN) {
+    if (!bird || !bird.alive) {
+      if (gameOverAnim.alpha >= 0.6) {
+        // Flap handled by input handler
+      }
+    } else {
+      updatePhysics(PHYSICS_DT);
+      // Update particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * PHYSICS_DT;
+        p.y += p.vy * PHYSICS_DT;
+        p.life -= p.decay * PHYSICS_DT;
+        if (p.type === 'candy') p.vy += 50 * PHYSICS_DT;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      scoreFlash *= Math.pow(0.9, PHYSICS_DT * 60);
+      if (scoreFlash < 0.01) scoreFlash = 0;
+    }
+  } else if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
+    const turbo = document.getElementById('turbo-check') && document.getElementById('turbo-check').checked;
+    const stepsPerFrame = turbo ? parseInt(document.getElementById('turbo-steps').value) : 1;
+    const logSteps = Math.log2(stepsPerFrame);
+    const actualSteps = Math.floor(2 ** logSteps);
+    for (let s = 0; s < actualSteps; s++) {
+      updateAI();
+    }
+    if (gameMode === MODE.AI_TRAIN && aiEpisode % 100 === 0) saveQTable();
+  }
+
+  // Animate game over
+  if (!bird || !bird.alive) {
+    gameOverAnim.birdY += 8 * PHYSICS_DT;
+    gameOverAnim.spin += 0.1;
+  }
+
+  draw();
+  updateMetrics();
+  drawSparkline();
+  checkPolicyBanner();
+}
+
+// Input handlers
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'KeyA' || e.code === 'KeyD') {
+    e.preventDefault();
+    if (!bird || !bird.alive) {
+      if (gameOverAnim.alpha >= 0.6) {
+        initGame();
+        return;
+      }
+    }
+    if (gameMode === MODE.HUMAN && bird.alive) {
+      if (config.jumpStyle === 'instant') {
+        bird.vy = config.flapVelocity;
+      } else if (config.jumpStyle === 'impulse') {
+        bird.vy = config.flapVelocity;
+      }
+    }
+    if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
+      aiLastAction = 1;
+    }
+  }
+});
+
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = W / rect.width;
+  const scaleY = H / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (!bird || !bird.alive) {
+    if (gameOverAnim.alpha >= 0.6) {
+      initGame();
+      return;
+    }
+    return;
+  }
+
+  if (gameMode === MODE.HUMAN) {
+    if (config.jumpStyle === 'instant') {
+      bird.vy = config.flapVelocity;
+    } else if (config.jumpStyle === 'impulse') {
+      bird.vy = config.flapVelocity;
+    }
+  }
+  if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
+    aiLastAction = 1;
+  }
+});
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (!bird || !bird.alive) {
+    if (gameOverAnim.alpha >= 0.6) {
+      initGame();
+      return;
+    }
+    return;
+  }
+  if (gameMode === MODE.HUMAN) {
+    if (config.jumpStyle === 'instant') {
+      bird.vy = config.flapVelocity;
+    } else if (config.jumpStyle === 'impulse') {
+      bird.vy = config.flapVelocity;
+    }
+  }
+  if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
+    aiLastAction = 1;
+  }
+}, { passive: false });
+
+// Slider event listeners
+document.getElementById('sliders').addEventListener('input', (e) => {
+  const key = e.target.dataset.key;
+  if (!key) return;
+  const step = parseFloat(e.target.step);
+  config[key] = parseFloat(e.target.value);
+  if (e.target.type === 'range') {
+    const inputs = document.querySelectorAll('#sliders input[data-key="' + key + '"]');
+    inputs.forEach(inp => {
+      if (inp !== e.target) inp.value = config[key];
+    });
+    const valEl = e.target.parentElement.querySelector('.val');
+    if (valEl) valEl.textContent = config[key].toFixed(step < 1 ? 2 : 0);
+  }
+  saveConfig();
+  updateDerivedValues();
+  clampSliders();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  config = { ...PHYSICS_DEFAULTS };
+  updateSliderDisplays();
+  saveConfig();
+  updateDerivedValues();
+});
+
+document.getElementById('mode-human').addEventListener('click', () => switchMode(MODE.HUMAN));
+document.getElementById('mode-ai-train').addEventListener('click', () => switchMode(MODE.AI_TRAIN));
+document.getElementById('mode-ai-play').addEventListener('click', () => switchMode(MODE.AI_PLAY));
+
+document.getElementById('ai-epsilon').addEventListener('input', (e) => {
+  aiEpsilon = parseFloat(e.target.value);
+  document.getElementById('ai-epsilon-val').textContent = aiEpsilon.toFixed(2);
+});
+
+document.getElementById('ai-alpha').addEventListener('input', (e) => {
+  aiAlpha = parseFloat(e.target.value);
+  document.getElementById('ai-alpha-val').textContent = aiAlpha.toFixed(2);
+});
+
+document.getElementById('ai-gamma').addEventListener('input', (e) => {
+  aiGamma = parseFloat(e.target.value);
+  document.getElementById('ai-gamma-val').textContent = aiGamma.toFixed(2);
+});
+
+document.getElementById('turbo-steps').addEventListener('input', (e) => {
+  document.getElementById('turbo-steps-val').textContent = e.target.value;
+});
+
+document.getElementById('export-btn').addEventListener('click', exportPolicy);
+document.getElementById('reset-policy-btn').addEventListener('click', resetPolicy);
+
+document.getElementById('import-btn').addEventListener('click', () => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (importPolicy(ev.target.result)) {
+          updateMetrics();
+          drawSparkline();
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+  input.click();
+});
+
+// Init
+if (!loadConfig()) {
+  config = configFromDefaults();
+}
+if (!loadQTable()) {
+  initQTable();
+}
+buildSliders();
+buildPresets();
+updateDerivedValues();
+updateMetrics();
+drawSparkline();
 initGame();
 requestAnimationFrame(gameLoop);
+
 </script>
-</body>
 </html>
