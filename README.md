@@ -3,7 +3,7 @@
 **Can a 35B mixture-of-experts model, running entirely on an eight-year-old gaming laptop
 with a 6 GB GTX 1060, build a complete arcade game unattended?**
 
-Yes. It took 22 minutes at ~11 tokens/second, and the result runs.
+Yes. It took 22 minutes, and the result runs.
 
 This repository is the full artefact of that run: the prompt it was given, the code it
 produced, the exact llama.cpp configuration that made it possible on this hardware, and an
@@ -86,7 +86,12 @@ The measured difference on this machine is stark:
 | Qwopus3.6-35B-A3B (Q4_K_S) | MoE, 3B active | **11.4 tok/s** |
 
 A ~9x speedup from a *larger* model. At 1.2 tok/s this experiment would have taken over
-three hours and been useless; at 11.4 tok/s it took 22 minutes.
+three hours and been useless; at MoE speeds it took 22 minutes.
+
+(Both rows come from the original measurement pass, so the ratio between them is sound.
+The A3B figure was later re-measured higher — see
+[These numbers supersede an earlier set](#these-numbers-supersede-an-earlier-set-and-the-gap-is-unexplained).
+The dense model was not re-run, so it is left alone rather than compared across protocols.)
 
 ---
 
@@ -99,7 +104,7 @@ llama-server.exe `
   --host 127.0.0.1 --port 8085 `
   -ngl 99 `
   --cpu-moe `
-  --threads 8 `
+  --threads 6 `
   --ctx-size 98304 `
   --jinja `
   -n -1
@@ -133,15 +138,61 @@ window grows:
 
 | Context | VRAM used | Generation |
 |---|---|---|
-| 16,384 | 2,877 MiB | 11.4 tok/s |
-| 32,768 | 3,375 MiB | 10.0 tok/s |
-| 65,536 | 4,051 MiB | 10.7 tok/s |
-| **98,304** | **4,695 MiB** | **10.6 tok/s** |
-| 131,072 | 5,357 MiB | 10.6 tok/s |
+| 16,384 | 2,661 MiB | 17.25 tok/s |
+| 32,768 | 2,997 MiB | 17.15 tok/s |
+| 65,536 | 3,669 MiB | 17.25 tok/s |
+| **98,304** | **4,341 MiB** | **17.16 tok/s** |
+| 131,072 | 5,013 MiB | 17.12 tok/s |
 
-98,304 is the configured default rather than the 131,072 maximum, to keep ~1.4 GB of VRAM
-headroom. At 131,072 only 787 MiB remain, and a browser claiming more VRAM can push the
-server over the edge — at which point throughput collapses rather than degrades.
+Each figure is the mean of four reps, measured twice per context in an
+up-then-back-down order so that thermal drift cancels rather than accumulating on
+whichever configuration happened to run last.
+
+Generation is **flat across the whole range** — 17.25 tok/s at 16k against 17.12 at 131k,
+a difference of 0.8% across an 8x larger window, which is inside the run-to-run spread.
+Context length is not a throughput decision on this setup. It is purely a VRAM decision, at
+a very predictable **21.0 MiB of KV cache per 1,000 tokens**.
+
+98,304 is the configured default rather than the 131,072 maximum, to keep VRAM headroom.
+At 131,072 roughly 1.1 GB remains free, and a browser claiming more VRAM can push the
+server over the edge — at which point throughput collapses rather than degrades, because
+the driver silently backs the overflow with *shared GPU memory* (system RAM reached over
+PCIe 3.0 x16, ~12 GB/s real). That is slower than simply letting the CPU read the same
+RAM at ~22.7 GB/s, and is the most likely reason the `-ncmoe` sweep above falls off a cliff
+rather than degrading gently (not directly instrumented, but it fits both the magnitude and
+the shape). Setting **CUDA - Sysmem Fallback Policy** to *Prefer No Sysmem Fallback*
+in the NVIDIA control panel converts that silent 2.5x regression into a visible
+allocation failure.
+
+### Thread count: 6, not 8
+
+The i5-8300H is 4 cores / 8 threads, so both "use every hardware thread" and "use only
+physical cores" are defensible guesses. Both are wrong — the best setting is **6**.
+
+| Threads | 1.4k-token prompt | 32.5k-token prompt |
+|---|---|---|
+| `-t 4` | 16.47 tok/s | — |
+| **`-t 6`** | **17.12 tok/s** | **14.91 tok/s** |
+| `-t 8` | 16.47 tok/s | 14.36 tok/s |
+
+About **+4%** in both regimes. Small, but it reproduces: in the 32.5k set every single
+`-t 6` rep (15.09, 15.14, 14.71, 14.69) beat every single `-t 8` rep (14.67, 14.41, 14.24,
+14.10). Prompt processing is unaffected — 147.6 against 147.3 tok/s — so this is a
+decode-side effect only, which fits a workload whose decode path is CPU-side expert GEMMs
+and whose prefill is GPU-side.
+
+Note that `-t 4` and `-t 8` tie *exactly* at 16.47. The intuition that hyperthread siblings
+contend for the same memory pipeline predicts `-t 4` should win; it doesn't. We have the
+measurement and no confident mechanism for why 6 specifically, so it is recorded as an
+empirical result rather than explained.
+
+Methodology matters here more than the number. Configurations were run in a mirrored order
+(`8,4,6,6,4,8`) so that thermal drift cancels. That turned out to be load-bearing: the
+first `-t 4` block reported 13.64 tok/s, which taken at face value would have made it look
+20% slower than `-t 8`. Its prompt-processing rate that block was 154 tok/s against ~181
+everywhere else — page-cache contention from reloading the 19 GB model early in the run,
+not a property of the thread count. Measured again later in the same run it returned 16.47.
+A single-pass benchmark would have published that artefact.
 
 ### Two things that look like optimisations and are not
 
@@ -171,16 +222,44 @@ load. Tune against the thing you will actually run.
 
 | Metric | Result |
 |---|---|
-| Generation (16k context) | **11.4 tok/s** |
-| Generation (98k context) | **10.5–10.6 tok/s** |
-| Prompt processing (short) | 63 tok/s |
-| Prompt processing (39,417-token batch) | **131 tok/s** |
-| VRAM at 98,304 context | 4,695 / 6,144 MiB |
+| Generation (16k context) | **17.25 tok/s** |
+| Generation (98k context) | **17.16 tok/s** |
+| Generation (32.5k-token prompt in flight) | **14.91 tok/s** |
+| Prompt processing (2,000-token batch) | **185 tok/s** |
+| Prompt processing (32,501-token batch) | 147 tok/s |
+| KV cache cost | 21.0 MiB per 1,000 tokens |
+| VRAM at 98,304 context | 4,341 / 6,144 MiB |
 
-Growing the context window 6x costs about **8%** of generation throughput. Prompt
-processing scales the opposite way — it more than doubles on large batches, which is
-exactly the regime an agentic coding session lives in, since each turn re-reads a large
-and mostly-unchanged context. Cache hits are free: 39,413 tokens replayed in 0 s.
+Two separate things are often conflated as "context". The **allocated window**
+(`--ctx-size`) costs VRAM and essentially no throughput. The **prompt actually in flight**
+does cost throughput: generation falls from 17.2 to 14.9 tok/s once 32.5k tokens are
+resident, because every generated token attends over them.
+
+Prompt processing peaks in the low thousands of tokens and declines from there — 185 tok/s
+at 2k, 147 at 32.5k, 131 at 39.4k. It is much lower on very short prompts (63 tok/s) simply
+because fixed per-request overhead dominates. So the shape is a rise then a slow fall, not
+the "doubles on large batches" that a two-point measurement suggested. Cache hits remain
+free: 39,413 tokens replayed in 0 s, which is what actually makes an agentic loop viable,
+since each turn re-reads a large and mostly-unchanged context.
+
+### These numbers supersede an earlier set, and the gap is unexplained
+
+An earlier pass recorded 11.4 tok/s at 16k and 10.6 at 98k. Everything above was
+re-measured on 2026-08-19 with the same binary, model and flags, and came out
+substantially **faster** — 17.25 and 17.16. Thread count does not explain it: `-t 8`, the
+old setting, still measures 16.47 today.
+
+The machine has not degraded, so the difference is in how or when the original figures were
+taken — plausibly background GPU load, or a different measurement protocol. No VRAM
+overclock is active (`clocks.max.memory` reads 4,004 MHz, stock). Rather than quietly swap
+the numbers, both sets are recorded here: the current ones are the ones to trust, and the
+discrepancy is stated because an unexplained 50% swing is exactly the kind of thing a
+benchmark writeup should not bury.
+
+The VRAM column moved too, by a consistent 200-350 MiB in the other direction. That one is
+benign: `nvidia-smi` reports *total* board usage, so those figures always included whatever
+else held VRAM at the time. The derived KV cost — 21.0 MiB per 1k tokens — is identical
+across both passes, which is the number that actually matters for planning.
 
 ## The run
 
@@ -193,9 +272,11 @@ and mostly-unchanged context. Cache hits are free: 39,413 tokens replayed in 0 s
 | Output | 2 commits, 520 lines, one self-contained HTML file |
 | Human intervention | none |
 
-At ~11 tok/s sustained, 22 minutes is on the order of 14,000 generated tokens across
-reasoning, tool calls and two code-writing passes — consistent with a 520-line file plus a
-self-directed polish commit (`234d249`) that the model wrote without being asked.
+22 minutes of wall-clock covers reasoning, tool calls, prefill on every turn and two
+code-writing passes. Generation alone runs at 15-17 tok/s depending on how much context is
+resident, but wall-clock is not pure generation, so the run is better read as "a 520-line
+file plus a self-directed polish commit (`234d249`) in under half an hour" than converted
+into a token count.
 
 The 34% context figure is worth dwelling on. The full agentic session — system prompt,
 tool schemas, file reads, two write passes and the model's own reasoning — fit in a third
