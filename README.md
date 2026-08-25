@@ -393,7 +393,8 @@ peak of ~108 around mid-training, then sags back to ~74–90 — a real curve, a
 one. The instability has a visible cause: 620 negative Q-values against 9 positive ones,
 because a `-100` death penalty swamps the `+10` per wall. The agent is choosing between
 degrees of bad. That, and a state space where two of five features are stuck on two values
-each, are the open items in [`TASKS_NEXT.md`](TASKS_NEXT.md) Block E.
+each, are the open items in [`TASKS_NEXT.md`](TASKS_NEXT.md) Block E, written up
+as ready-to-send task files in [`prompts/`](prompts/).
 
 [`AGENTS.md`](AGENTS.md) collects what it takes to drive the local model productively —
 prompt shape, session hygiene, the delivery mechanics that silently truncate a prompt, and
@@ -409,6 +410,7 @@ REVIEW.md           ten defects, ranked by impact on playability
 mission_rl.md       the follow-up handoff: physics lab + RL agent
 TASKS_NEXT.md       the running task list; Block E is what execution found
 AGENTS.md           how to drive the model, and how to verify what it produces
+prompts/            ready-to-send task files for the model, one concern each
 harness/            headless jsdom harness — run the game, do not read it
 ```
 

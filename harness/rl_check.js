@@ -10,6 +10,7 @@
 //   node rl_check.js          smoke test + persistence round-trip
 //   node rl_check.js curve    learning curve by decile
 //   node rl_check.js features state-feature variety + flap wiring check
+//   node rl_check.js sweep    reward-scale sweep (needs prompts/E6 applied)
 //
 // It loads index.html in jsdom, stubs the 2D canvas context, and drives
 // gameLoop by hand instead of through requestAnimationFrame, so a run that
@@ -19,7 +20,9 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const GAME = path.join(__dirname, '..', 'index.html');
+// QWENGAME_HTML lets a variant be measured without touching the working copy,
+// which is how the sweep path itself was tested before E6 existed.
+const GAME = process.env.QWENGAME_HTML || path.join(__dirname, '..', 'index.html');
 const noop = () => {};
 
 // A 2D context that accepts every call and returns something harmless. jsdom has
@@ -188,5 +191,66 @@ function features() {
   console.log('clampBucket spike:', q('JSON.stringify([...new Set(Array.from({length: 400}, function (_, i) { return clampBucket((i - 200) * 8, Q_BUCKETS.spikeBuckets); }))].sort(function (a, b) { return a - b; }))'));
 }
 
+// Sweep the reward scale. Requires the `rewards` object from prompts/E6; until
+// that lands there is nothing to sweep and this says so rather than silently
+// measuring the hardcoded literals.
+function sweep() {
+  const probe = boot();
+  if (probe.q('typeof rewards') !== 'object') {
+    console.log('No `rewards` object in index.html — apply prompts/E6-reward-config.md first.');
+    console.log('Until then the reward literals are hardcoded inside updateAI and cannot be swept.');
+    return;
+  }
+
+  // Vary the terminal penalty against the wall reward, holding the rest fixed.
+  // These are the two that set whether surviving is positively valued at all.
+  const configs = [
+    { death: -100, wallHit: 10,  stepAlive: 0.1 },   // current defaults
+    { death: -50,  wallHit: 10,  stepAlive: 0.1 },
+    { death: -20,  wallHit: 10,  stepAlive: 0.1 },
+    { death: -10,  wallHit: 10,  stepAlive: 0.1 },
+    { death: -100, wallHit: 50,  stepAlive: 0.1 },
+    { death: -20,  wallHit: 20,  stepAlive: 0.5 },
+    { death: -10,  wallHit: 20,  stepAlive: 1.0 },
+  ];
+
+  console.log('reward sweep — 1200 frames x 300 steps each\n');
+  console.log('death  wall  step |  first200  last200   delta |   best |  q>0   q<0 | curve');
+  console.log('-'.repeat(96));
+
+  for (const c of configs) {
+    const { w, q } = boot();
+    w.eval('Object.assign(rewards, ' + JSON.stringify(c) + ')');
+    startTraining(w, 300);
+    const crash = runFrames(w, 1200);
+    if (crash) { console.log(JSON.stringify(c), crash.split('\n')[0]); continue; }
+
+    const s = q('aiScores');
+    const first = mean(s.slice(0, 200));
+    const last = mean(s.slice(-200));
+    const B = Math.floor(s.length / 6);
+    // A compact shape, so rise-then-sag is visible at a glance next to the delta.
+    const shape = Array.from({ length: 6 }, (_, d) => {
+      const m = mean(s.slice(d * B, (d + 1) * B));
+      return ' .:-=+*#%@'[Math.min(9, Math.round(m / 25))];
+    }).join('');
+
+    console.log(
+      String(c.death).padStart(5),
+      String(c.wallHit).padStart(5),
+      String(c.stepAlive).padStart(5),
+      '|', first.toFixed(1).padStart(9), last.toFixed(1).padStart(8),
+      (last - first >= 0 ? '+' : '') + (last - first).toFixed(1).padStart(6),
+      '|', String(q('aiBestScore')).padStart(6),
+      '|', String(q('Array.from(qTable).filter(x => x > 0).length')).padStart(4),
+      String(q('Array.from(qTable).filter(x => x < 0).length')).padStart(5),
+      '|', shape
+    );
+  }
+
+  console.log('\ncurve shape: low  .:-=+*#%@  high, six equal slices of training.');
+  console.log('Want a rising delta AND a shape that holds at the right, not one that peaks mid-run.');
+}
+
 const mode = process.argv[2] || 'smoke';
-({ smoke: smoke, curve: curve, features: features }[mode] || smoke)();
+({ smoke: smoke, curve: curve, features: features, sweep: sweep }[mode] || smoke)();

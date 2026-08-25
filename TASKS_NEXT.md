@@ -504,39 +504,57 @@ module variable surfaced through `#save-status`.
 
 ---
 
-### - [ ] E5 (P1) `dy` and `ds` are stuck on two values each
+### - [ ] E5 (P1) `clampBucket` returns on its first threshold, so 14 of 17 bands are dead
 
-**Location:** `clampBucket`, `dyBucket`, `dySpikeBucket`.
+**Task file:** [`prompts/E5-state-features.md`](prompts/E5-state-features.md)
 
-Measured over 4,000 steps after E1 and E2 were fixed:
+**Location:** `clampBucket`, `dyBucket`, `vyBucket`, `dySpikeBucket`, `Q_SIZES`.
 
+**Root cause.** The loop tests thresholds in ascending order and returns on the
+first match, so only `thresholds[0]` is ever consulted:
+
+```js
+for (let i = 0; i < thresholds.length; i++) {
+  if (val < -thresholds[i]) return thresholds.length - i;      // any val < -8  -> 8
+  if (val > thresholds[i]) return thresholds.length + i + 1;   // any val >  8  -> 9
+}
+return thresholds.length;                                       // |val| <= 8   -> 8
 ```
-dx    distinct=8    of 12   [0,1,2,3,4,5,10,11]
-dy    distinct=2    of 17   [8,9]
-vy    distinct=4    of 9    [0,1,2,3]
-ds    distinct=2    of 10   [8,9]
-```
 
-`clampBucket` only ever emits `[0, 8, 9]` in practice — three of its ten possible
-outputs. The threshold ladder is not being exercised: the inputs are almost
-always either near zero or past the 480 clamp, so the eight intermediate bands
-are dead. `dy` also has 17 declared slots for a function that can produce at most
-10 values, so seven are unreachable by construction.
+Measured over every integer input from -960 to 960, the function produces
+`[0, 8, 9]` — three of a possible seventeen. Every negative distance from -10 to
+-300 is the same state as every other.
 
-The agent is conditioning on 323 states out of 36,720. Fixing this is the largest
-remaining lever on learning quality.
+**The dimensions were already right.** This is the useful part: `Q_SIZES` was
+declared `[12, 17, 9, 9, 2]`, and for a correct bucketer those are exactly the
+sizes you want — a signed bucketer over `n` thresholds yields `2n+1` values and
+an unsigned one yields `n+1`:
 
-**Required change.** Re-derive the threshold ladders from the actual observed
-distribution of each quantity rather than from a guessed geometric series, and
-size each dimension to exactly the number of values its bucket function can
-return. Do not change the dimension sizes without changing `Q_SIZES` — see E2.
+| feature | bucketer | thresholds | size |
+|---|---|---|---|
+| `dy` | signed | 8 | `2*8+1` = 17 |
+| `vy` | signed | 4 | `2*4+1` = 9 |
+| `ds` | unsigned, a distance | 8 | `8+1` = 9 |
 
-**Check:** `node harness/rl_check.js features`. Each feature should span most of
-its declared dimension, and `statesVisited` should be in the thousands.
+So E2 changed `ds` from 9 to 10 to accommodate a broken function. Once the
+function is fixed it must go back to 9, and `Q_SIZES` should be derived from the
+threshold lists rather than written out, which is what prevents E2 recurring.
+
+**Also.** `vyBucket` takes `Math.abs` of the velocity, so a bird climbing at 300
+px/s and one plummeting at 300 px/s are the same state. Rising versus falling is
+the most decisive distinction in this game and the agent currently cannot make
+it.
+
+**Check:** `node harness/rl_check.js features`. `dy` must span well beyond two
+values, `vy` must show values either side of its centre band, `mixRadixKey max`
+must still equal `max legal index`, and `statesVisited` should reach the
+thousands rather than 323.
 
 ---
 
 ### - [ ] E6 (P1) The reward scale pins the table negative
+
+**Task file:** [`prompts/E6-reward-config.md`](prompts/E6-reward-config.md)
 
 **Location:** the reward block in `updateAI`.
 

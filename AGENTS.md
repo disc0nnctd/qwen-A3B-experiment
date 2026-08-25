@@ -88,7 +88,8 @@ model free-associates to the first defect it notices anywhere in the file and
 fixes that instead. Framed as "replace this exact line with this exact line", it
 is reliable and fast — a five-edit refactor landed correctly in one pass.
 
-A prompt that works looks like:
+Ready-to-send task files live in [`prompts/`](prompts/); `prompts/README.md`
+has the exact invocation. A prompt that works looks like:
 
 ```
 Apply these three exact edits to index.html. Do not look for other bugs.
