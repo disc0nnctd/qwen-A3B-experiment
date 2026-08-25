@@ -34,9 +34,22 @@ are the tasks below. The two the user reported directly are **T1** and **T2**.
 
 ---
 
+## Status as of the 2026-08-25 session
+
+T1–T11 and T13–T16 are **done** and verified by running `harness/rl_check.js`,
+not by inspection. T12 remains open. Note that several of these were already
+fixed in the working tree before this session started while their boxes were
+still unticked — this file drifts, so confirm against the code.
+
+The RL harness now trains: over 7,139 episodes the mean score rises from ~60 to a
+peak of ~108 before sagging back to ~74–90. It is genuinely learning and
+genuinely unstable. Block E below is the new work, found by execution.
+
+---
+
 ## Block A — the reported bug: dying the instant you touch a wall
 
-### - [ ] T1 (P0) Spikes must spawn on the **opposite** wall, not the wall just hit
+### - [x] T1 (P0) Spikes must spawn on the **opposite** wall, not the wall just hit
 
 **Symptom (user-reported):** *"hitting a wall still spawns the spikes too fast that the
 bird dies if a spike immediately spawns at contact."*
@@ -84,7 +97,7 @@ contact, and the wall you are touching must be visibly empty of spikes every tim
 
 ---
 
-### - [ ] T2 (P0) Spike bases must sit flush against the wall face
+### - [x] T2 (P0) Spike bases must sit flush against the wall face
 
 **Symptom (user-reported):** *"the spikes are still slightly away from the real wall."*
 
@@ -111,7 +124,7 @@ Drag both sliders end to end and confirm the bases stay welded to the wall.
 
 ---
 
-### - [ ] T3 (P0) Never spawn a spike in the slot the bird occupies
+### - [x] T3 (P0) Never spawn a spike in the slot the bird occupies
 
 **Location:** `spawnSpikeWall`.
 
@@ -142,7 +155,7 @@ number of free slots minus one.
 
 ## Block B — geometry still wrong
 
-### - [ ] T4 (P1) Ceiling and floor spikes are detached from their surfaces
+### - [x] T4 (P1) Ceiling and floor spikes are detached from their surfaces
 
 **Location:** `spawnCapSpikes`.
 
@@ -167,7 +180,7 @@ row extends past the side walls, at `spikeWidth` = 10 and = 60.
 
 ---
 
-### - [ ] T5 (P2) Candy can still spawn on top of a spike
+### - [x] T5 (P2) Candy can still spawn on top of a spike
 
 **Location:** `spawnCandy`.
 
@@ -191,7 +204,7 @@ never overlap a spike.
 
 These are all in the Q-learning section. Each one alone is enough to prevent learning.
 
-### - [ ] T6 (P0) The Q-table has no action dimension — every state is corrupted
+### - [x] T6 (P0) The Q-table has no action dimension — every state is corrupted
 
 **Location:** `initQTable`, `mixRadixKey`, `getBestAction`, `updateQ`.
 
@@ -225,7 +238,7 @@ values, and re-running `getBestAction` on the same state twice must agree.
 
 ---
 
-### - [ ] T7 (P0) Training stops permanently after the first death
+### - [x] T7 (P0) Training stops permanently after the first death
 
 **Location:** `updateAI`, and `initGame`.
 
@@ -255,7 +268,7 @@ continuously into the hundreds, not stop at 1.
 
 ---
 
-### - [ ] T8 (P0) Every episode is recorded as a score of zero
+### - [x] T8 (P0) Every episode is recorded as a score of zero
 
 **Location:** `updateAI`, the `done` branch.
 
@@ -290,7 +303,7 @@ hit, and keep the per-step survival term in the *reward* only.
 
 ---
 
-### - [ ] T9 (P1) The agent has no idea where the gap is
+### - [x] T9 (P1) The agent has no idea where the gap is
 
 **Location:** `dyBucket`, and `aiTargetBucket`.
 
@@ -309,7 +322,7 @@ and always name a slot with no spike in it.
 
 ---
 
-### - [ ] T10 (P2) Epsilon jumps discontinuously at episode 1500
+### - [x] T10 (P2) Epsilon jumps discontinuously at episode 1500
 
 **Location:** `computeEpsilon`.
 
@@ -329,7 +342,7 @@ return Math.max(EPS_MIN, Math.exp(-k * aiEpisode));
 
 ---
 
-### - [ ] T11 (P2) The Q-table is written to `localStorage` many times per second
+### - [x] T11 (P2) The Q-table is written to `localStorage` many times per second
 
 **Location:** `gameLoop`.
 
@@ -354,14 +367,14 @@ having actually changed — so it fires exactly once per 100 episodes.
 the round trip or, if the intent was to snap to a power of two, use
 `2 ** Math.round(Math.log2(stepsPerFrame))`.
 
-### - [ ] T13 (P2) Death animation is still 8 px per second
+### - [x] T13 (P2) Death animation is still 8 px per second
 
 `gameOverAnim.birdY += 8 * PHYSICS_DT` moves the bird 8 px **per second**; clearing the
 screen takes a minute. `mission.md` §5 asks the bird to "plunge rapidly off the bottom
 screen boundary". Use a real fall — `600` px/s accelerating — and the same for the `0.1`
 spin. `gameOverAnim.whiteFlash` is still specified but not drawn.
 
-### - [ ] T14 (P2) Unreachable branch in the jump-height readout
+### - [x] T14 (P2) Unreachable branch in the jump-height readout
 
 ```js
 jumpH > 300 ? 'amber' : (jumpH > 960 ? 'red' : 'green')
@@ -370,13 +383,13 @@ jumpH > 300 ? 'amber' : (jumpH > 960 ? 'red' : 'green')
 Anything `> 960` is already `> 300`, so `red` can never render. Order the tests from the
 most extreme downward.
 
-### - [ ] T15 (P2) Dead code in `dxBucket`
+### - [x] T15 (P2) Dead code in `dxBucket`
 
 Both branches of the outer ternary are byte-identical, and the literal `12` inside them is
 a stand-in for `config.birdRadius` that will not track the slider. Collapse the ternary and
 use the config value.
 
-### - [ ] T16 (P2) Difficulty curve ignores the score
+### - [x] T16 (P2) Difficulty curve ignores the score
 
 `mission.md` §3 asks for 2–3 spikes at score 0–5, 3–4 at 6–15, 4–5 at 16+. The current
 count depends only on the sliders. Keep the sliders as the outer bounds and let the score
@@ -394,3 +407,150 @@ curve select within them, so the panel stays authoritative but the game still ra
 6. The score sparkline shows a clearly rising trend over those episodes.
 7. Best score under AI_PLAY beats a random-action baseline by at least 3x.
 8. Changing gravity raises the physics-mismatch banner and measurably degrades AI_PLAY.
+
+
+---
+
+## Block E — found by running the game, 2026-08-25
+
+None of these were visible by reading the code. All four were found with
+`harness/rl_check.js`. Three were fixed in this session; the analysis for the
+remaining work is in E5 and E6.
+
+### - [x] E1 (P0) The agent's FLAP action was a no-op
+
+**Location:** `updateAI`.
+
+**Root cause.** Every `bird.vy = config.flapVelocity` in the file sits inside a
+human input handler — the keydown, click and touchstart listeners. Those handlers
+apply the flap only when `gameMode === MODE.HUMAN`; in AI mode they set
+`aiLastAction = 1`, which is a display variable. `updateAI` itself chose an
+action, stored it, and went straight to `updatePhysics` without ever touching
+`bird.vy`.
+
+So both of the agent's actions were identical, and no policy could be better than
+any other. Measured before the fix: the agent chose FLAP 1,950 times out of 4,000
+steps and `bird.vy` stayed in the range 0..500 the entire run, against a
+`flapVelocity` of -470. The bird was in permanent freefall.
+
+**Fix.** Apply the flap in `updateAI` immediately after the action is chosen and
+before `updatePhysics`, matching what the human handlers do.
+
+**Effect.** States visited 21 → 323. Best score 62 → 280. Mean of the last 200
+episodes 57.8 → 90.6.
+
+**Check:** `node harness/rl_check.js features` must report `vy ever negative:
+true (flap is wired)`.
+
+---
+
+### - [x] E2 (P0) `ds` bucket overflowed the Q-table and crashed the render loop
+
+**Location:** `initQTable`, `mixRadixKey`, and the three `expectedSize` literals.
+
+**Root cause.** `clampBucket(val, thresholds)` returns `0` below the low bound and
+`thresholds.length + 1` above the high bound, so with the 8-entry
+`Q_BUCKETS.spikeBuckets` it yields **ten** distinct values, 0 through 9. But the
+`ds` dimension was declared as **9**. Whenever the feature bucketed to 9 the state
+index ran past the end of the table:
+
+```
+mixRadixKey max legal   = 33047
+mixRadixKey with ds = 9 = 34883   against a 33048-state table
+```
+
+Three consequences, in rising order of nastiness:
+
+1. `qTable[state * 2]` read back `undefined`, so `pushStepLog` threw on
+   `.toFixed` and killed `gameLoop` **before** `draw`, `updateMetrics` and
+   `drawSparkline`. Because `requestAnimationFrame` is the first line of
+   `gameLoop`, the next frame still scheduled — so training advanced while the
+   entire UI stayed frozen at zero. This is what "the agent won't show me the
+   RL steps" actually was.
+2. `getBestAction` compared `undefined >= undefined` → false, silently always
+   returning action 0 in those states.
+3. `updateQ` wrote to an out-of-range typed-array index, which is a **silent
+   no-op** — those updates were discarded.
+
+**Fix.** One shared `Q_SIZES` / `Q_NUM_STATES` pair used by all five sites, with
+the `ds` dimension corrected to 10, plus a clamp in `getStateKey` so a future
+indexing mistake degrades instead of killing the render loop.
+
+**Check:** `node harness/rl_check.js features` — `mixRadixKey max` must equal
+`max legal index`.
+
+---
+
+### - [x] E3 (P1) The step log froze permanently after 200 lines
+
+**Location:** `renderStepLog`.
+
+Two independent causes, both of the same shape: a guard comparing
+`aiLogBuffer.length` against `logEl.childElementCount`, which are permanently
+equal once the ring buffer saturates at `LOG_MAX`. Replaced with an
+`aiLogSeq` / `aiLogRendered` counter pair, and the full 200-node rebuild replaced
+with an append-and-trim.
+
+---
+
+### - [x] E4 (P2) A quota failure in `saveRun` threw a second time
+
+**Location:** `saveRun`.
+
+The catch block called `localStorage.setItem('dtts_run_error', ...)`. Since the
+only realistic reason `saveRun` fails is an exhausted quota, that second write
+also threw, and the exception escaped the catch. Replaced with a `lastSaveError`
+module variable surfaced through `#save-status`.
+
+---
+
+### - [ ] E5 (P1) `dy` and `ds` are stuck on two values each
+
+**Location:** `clampBucket`, `dyBucket`, `dySpikeBucket`.
+
+Measured over 4,000 steps after E1 and E2 were fixed:
+
+```
+dx    distinct=8    of 12   [0,1,2,3,4,5,10,11]
+dy    distinct=2    of 17   [8,9]
+vy    distinct=4    of 9    [0,1,2,3]
+ds    distinct=2    of 10   [8,9]
+```
+
+`clampBucket` only ever emits `[0, 8, 9]` in practice — three of its ten possible
+outputs. The threshold ladder is not being exercised: the inputs are almost
+always either near zero or past the 480 clamp, so the eight intermediate bands
+are dead. `dy` also has 17 declared slots for a function that can produce at most
+10 values, so seven are unreachable by construction.
+
+The agent is conditioning on 323 states out of 36,720. Fixing this is the largest
+remaining lever on learning quality.
+
+**Required change.** Re-derive the threshold ladders from the actual observed
+distribution of each quantity rather than from a guessed geometric series, and
+size each dimension to exactly the number of values its bucket function can
+return. Do not change the dimension sizes without changing `Q_SIZES` — see E2.
+
+**Check:** `node harness/rl_check.js features`. Each feature should span most of
+its declared dimension, and `statesVisited` should be in the thousands.
+
+---
+
+### - [ ] E6 (P1) The reward scale pins the table negative
+
+**Location:** the reward block in `updateAI`.
+
+After 7,139 episodes: `q > 0` was **9** values against `q < 0` of **620**. The
+`-100` death penalty swamps the `+10` per wall and the `+0.1` per step, so nearly
+every state-action pair carries a negative value and the agent is choosing
+between degrees of bad. This is the most likely cause of the curve rising to ~108
+by mid-training and then sagging back to ~74–90 rather than converging.
+
+**Required change.** Rebalance so that surviving and clearing walls is positively
+valued, not merely less negative. Reducing the terminal penalty, or scaling the
+per-wall reward up, or discounting the death penalty by episode length are all
+reasonable; measure with `node harness/rl_check.js curve` and keep whichever
+produces a monotone decile curve.
+
+**Check:** the decile curve must rise and hold rather than rise and sag, and
+`q > 0` must be a substantial fraction of the visited states.

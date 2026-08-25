@@ -361,6 +361,44 @@ There is a second motive. The failure documented above is a model producing plau
 well-structured, unverified numerical work. A training loop cannot be self-deceived in
 that way: an agent that cannot score is measurable in a way that "looks correct" is not.
 
+That motive paid off, and not gently. The RL harness was built, and it did not train. It
+looked like it trained — three-state architecture, correct Q-learning update rule, epsilon
+annealing, a sparkline — and the episode counter climbed. What it was actually doing was
+running an agent whose only action was a **no-op**: every `bird.vy = config.flapVelocity`
+in the file sat inside a human input handler, so choosing FLAP did nothing at all. The
+agent chose FLAP 1,950 times in 4,000 steps while the bird stayed in permanent freefall.
+Alongside it, a bucket function returning ten values into a nine-wide table dimension
+overflowed the Q-table, crashed `gameLoop` before every render, and silently discarded
+those updates — which is why the panel showed zeros while training advanced underneath it.
+
+Neither was visible by reading the code. Both were found in minutes by running it. That is
+the same failure mode as the gravity constant, one level up: **architecturally sound,
+behaviourally unverified.**
+
+So the harness got a harness. [`harness/rl_check.js`](harness/rl_check.js) loads the game
+in jsdom, stubs the canvas, and drives the loop by hand, asserting on what actually
+happens — whether the flap is wired, whether the state features span their dimensions,
+whether the index arithmetic stays in bounds, whether the panel updates, whether a run
+survives a save-and-reload:
+
+```
+cd harness && npm install
+node rl_check.js            # smoke test + persistence round-trip
+node rl_check.js curve      # learning curve by decile
+node rl_check.js features   # feature variety + flap wiring + index bounds
+```
+
+With the flap wired, it learns. Over 7,139 episodes the mean score rises from ~60 to a
+peak of ~108 around mid-training, then sags back to ~74–90 — a real curve, and an unstable
+one. The instability has a visible cause: 620 negative Q-values against 9 positive ones,
+because a `-100` death penalty swamps the `+10` per wall. The agent is choosing between
+degrees of bad. That, and a state space where two of five features are stuck on two values
+each, are the open items in [`TASKS_NEXT.md`](TASKS_NEXT.md) Block E.
+
+[`AGENTS.md`](AGENTS.md) collects what it takes to drive the local model productively —
+prompt shape, session hygiene, the delivery mechanics that silently truncate a prompt, and
+the standing rule that its self-reports are not evidence.
+
 ## Repository layout
 
 ```
@@ -369,6 +407,10 @@ original/index.html the model's unedited output (commit 234d249)
 index.html          the working copy, still being extended by the model
 REVIEW.md           ten defects, ranked by impact on playability
 mission_rl.md       the follow-up handoff: physics lab + RL agent
+TASKS_NEXT.md       the running task list; Block E is what execution found
+AGENTS.md           how to drive the model, and how to verify what it produces
+harness/            headless jsdom harness — run the game, do not read it
 ```
 
 Open either HTML file directly in a browser. No build step, no dependencies, no network.
+The harness is the only thing here with a dependency, and the game does not need it.
