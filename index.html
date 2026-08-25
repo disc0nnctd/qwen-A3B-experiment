@@ -585,6 +585,11 @@ let trainedPhysicsHash = null;
 let aiTargetBucket = null;
 let aiLastAction = -1;
 let aiLearning = false;
+let aiQUpdates = 0;
+
+// Per-step trace so the graph moves every frame instead of once per episode.
+const LIVE_TRACE_MAX = 240;
+let aiLiveTrace = [];
 
 // RL step inspector variables
 let aiStepEpisode = 0;
@@ -728,6 +733,7 @@ function updateQ(state, action, reward, nextState, done) {
     target = reward + aiGamma * qTable[nextState * 2 + bestNext];
   }
   qTable[stateIdx] += aiAlpha * (target - oldQ);
+  aiQUpdates++;
   // Record TD error
   aiStepTdError = target - oldQ;
 }
@@ -815,6 +821,8 @@ function updateAI() {
     resetEpisode();
   } else {
     aiCurrentScore++;
+    aiLiveTrace.push(aiCurrentScore);
+    if (aiLiveTrace.length > LIVE_TRACE_MAX) aiLiveTrace.shift();
     aiTotalSteps++;
   }
 
@@ -1169,6 +1177,8 @@ function updateMetrics() {
     ['Score', aiCurrentScore],
     ['Best', aiBestScore],
     ['States visited', aiStatesVisited.size],
+    ['Learning', aiLearning ? 'ON' : 'OFF (not updating Q)'],
+    ['Q updates', aiQUpdates],
   ];
   if (aiScores.length > 0) {
     const last50 = aiScores.slice(-50);
@@ -1186,31 +1196,54 @@ function drawSparkline() {
   const c = el.getContext('2d');
   const w = el.width, h = el.height;
   c.clearRect(0, 0, w, h);
-  if (aiScores.length < 2) return;
 
-  const maxScore = Math.max(5, ...aiScores.slice(-200));
-  const step = w / Math.max(1, aiScores.length - 1);
+  // Window to the most recent episodes. Plotting the entire history compressed
+  // every new episode into well under a pixel, which is why it looked frozen.
+  const VIEW = 200;
+  const view = aiScores.slice(-VIEW);
 
-  // Raw scores
-  c.strokeStyle = 'rgba(79,195,247,0.2)';
+  // Live per-step trace along the bottom third: this is what moves every frame.
+  if (aiLiveTrace.length > 1) {
+    const lmax = Math.max(5, ...aiLiveTrace);
+    const lstep = w / (LIVE_TRACE_MAX - 1);
+    c.strokeStyle = 'rgba(255,235,59,0.55)';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let i = 0; i < aiLiveTrace.length; i++) {
+      const x = i * lstep;
+      const y = h - (aiLiveTrace[i] / lmax) * h * 0.30;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.stroke();
+  }
+
+  if (view.length < 2) return;
+
+  const maxScore = Math.max(5, ...view);
+  const step = w / Math.max(1, view.length - 1);
+
+  // Raw per-episode scores over the window.
+  c.strokeStyle = 'rgba(79,195,247,0.25)';
   c.lineWidth = 1;
   c.beginPath();
-  for (let i = 0; i < aiScores.length; i++) {
+  for (let i = 0; i < view.length; i++) {
     const x = i * step;
-    const y = h - (aiScores[i] / maxScore) * h * 0.9;
+    const y = h - (view[i] / maxScore) * h * 0.9;
     if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
   }
   c.stroke();
 
-  // Moving average
+  // Moving average, computed with a running sum in a single pass instead of
+  // recomputing each window from scratch every frame.
   const window = 50;
-  if (aiScores.length >= window) {
-    c.strokeStyle = 'rgba(79,195,247,0.9)';
+  if (view.length >= window) {
+    c.strokeStyle = 'rgba(79,195,247,0.95)';
     c.lineWidth = 2;
     c.beginPath();
-    for (let i = window - 1; i < aiScores.length; i++) {
-      let sum = 0;
-      for (let j = i - window + 1; j <= i; j++) sum += aiScores[j];
+    let sum = 0;
+    for (let i = 0; i < window; i++) sum += view[i];
+    for (let i = window - 1; i < view.length; i++) {
+      if (i >= window) sum += view[i] - view[i - window];
       const avg = sum / window;
       const x = i * step;
       const y = h - (avg / maxScore) * h * 0.9;
