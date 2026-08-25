@@ -1,0 +1,14 @@
+{
+  "name": "qwengame-harness",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless verification harness for the RL build in index.html",
+  "scripts": {
+    "check": "node rl_check.js",
+    "curve": "node rl_check.js curve",
+    "features": "node rl_check.js features"
+  },
+  "dependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
