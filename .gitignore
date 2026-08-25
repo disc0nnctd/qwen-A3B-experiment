@@ -1,0 +1,8 @@
+node_modules/
+
+# Throwaway helper scripts from individual model sessions. _build.py in
+# particular regenerates index.html from a stale early snapshot and would
+# destroy the live game if run — see AGENTS.md.
+_build.py
+_p.py
+_write.py

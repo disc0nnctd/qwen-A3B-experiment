@@ -49,6 +49,24 @@ body { background: #2d2d2d; display: flex; justify-content: center; align-items:
 .turbo-row input[type=checkbox] { width: 16px; }
 .turbo-row input[type=range] { flex: 1; }
 .turbo-row .val { font-size: 11px; color: #aaa; }
+.rl-inspector { font-size: 11px; padding: 6px 8px; background: #2d2d2d; border-radius: 4px; margin: 6px 0; font-family: 'Courier New', monospace; line-height: 1.5; }
+.rl-inspector .rl-label { color: #aaa; }
+.rl-inspector .rl-val { color: #4fc3f7; }
+.rl-inspector .rl-action { color: #ffeb3b; }
+.rl-inspector .rl-explore { color: #ff9800; }
+.rl-inspector .rl-greedy { color: #4caf50; }
+.rl-inspector .rl-reward { color: #e74c3c; }
+.rl-inspector .rl-td { color: #ff9800; }
+.rl-log-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
+.rl-log-row label { font-size: 11px; }
+.rl-log { font-family: 'Courier New', monospace; font-size: 10px; background: #1a1a1a; color: #aaa; border: 1px solid #444; border-radius: 4px; padding: 4px; height: 200px; overflow-y: auto; line-height: 1.3; white-space: nowrap; }
+.rl-log .log-line { border-bottom: 1px solid #2a2a2a; padding: 1px 2px; }
+.rl-log .log-line:last-child { border-bottom: none; }
+.rl-log .log-reward-pos { color: #4caf50; }
+.rl-log .log-reward-neg { color: #e74c3c; }
+.rl-log .log-reward-epic { color: #ff9800; }
+.rl-log .log-action-flap { color: #ffeb3b; }
+.rl-log .log-action-noop { color: #aaa; }
 </style>
 
 </head>
@@ -80,6 +98,8 @@ body { background: #2d2d2d; display: flex; justify-content: center; align-items:
 <div id="ai-section" style="display:none">
 <h3>AI Training</h3>
 
+<div class="action-row"><button id="start-learn-btn">Start Learning</button></div>
+
 <div class="slider-row"><label>Epsilon</label><input type="range" id="ai-epsilon" min="0" max="1" step="0.01" value="1"><span class="val" id="ai-epsilon-val">1.00</span></div>
 
 <div class="slider-row"><label>Alpha</label><input type="range" id="ai-alpha" min="0.01" max="1" step="0.01" value="0.15"><span class="val" id="ai-alpha-val">0.15</span></div>
@@ -90,9 +110,25 @@ body { background: #2d2d2d; display: flex; justify-content: center; align-items:
 
 <div id="metrics"></div>
 
+<div id="rl-inspector" class="rl-inspector" style="display:none">
+  <div><span class="rl-label">MODE:</span><span class="rl-val" id="rl-mode">-</span> <span class="rl-label">EP:</span><span class="rl-val" id="rl-ep">-</span> <span class="rl-label">STEP:</span><span class="rl-val" id="rl-step">-</span></div>
+  <div><span class="rl-label">STATE:</span><span class="rl-val" id="rl-state">-</span></div>
+  <div><span class="rl-label">ACTION:</span><span class="rl-val" id="rl-action">-</span> <span class="rl-label">REWARD:</span><span class="rl-val" id="rl-reward">-</span> <span class="rl-label">TD ERR:</span><span class="rl-val" id="rl-td">-</span></div>
+  <div><span class="rl-label">Q(NOOP):</span><span class="rl-val" id="rl-q0">-</span> <span class="rl-label">Q(FLAP):</span><span class="rl-val" id="rl-q1">-</span></div>
+</div>
+
+<div id="rl-log-section" style="display:none; margin-top: 6px;">
+  <div class="rl-log-row">
+    <input type="checkbox" id="rl-pause-log"><label for="rl-pause-log">Pause log</label>
+  </div>
+  <div id="rl-log" class="rl-log"></div>
+</div>
+
 <canvas class="sparkline-canvas" id="sparkline-canvas" width="296" height="80"></canvas>
 
-<div class="action-row"><button id="export-btn">Export</button><button id="import-btn">Import</button><button id="reset-policy-btn">Reset Policy</button></div>
+<div class="action-row"><button id="export-btn">Export</button><button id="import-btn">Import</button><button id="reset-policy-btn">Reset Policy</button><button id="save-run-btn">Save run</button></div>
+
+<div id="save-status"></div>
 
 <div id="policy-banner"></div>
 
@@ -102,7 +138,7 @@ body { background: #2d2d2d; display: flex; justify-content: center; align-items:
 
 const PHYSICS_DEFAULTS = {
   gravity: 1300, flapVelocity: -470, maxFallSpeed: 500, horizontalSpeed: 240,
-  jumpStyle: 'instant', impulseFrames: 9, birdRadius: 16,
+  jumpStyle: 0, impulseFrames: 9, birdRadius: 16,
   spikeWidth: 30, spikeHeight: 24, spikeAngle: 0,
   spikeCountMin: 2, spikeCountMax: 5, candyChance: 0.5,
 };
@@ -113,12 +149,12 @@ const SLOT_COUNT = 11;
 const SLOT_H = H / SLOT_COUNT;
 const PHYSICS_DT = 1/60;
 const PRESETS = {
-  Tuned:       {gravity:4200, flapVelocity:-700, maxFallSpeed:850, horizontalSpeed:290, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
-  Balanced:    {gravity:2600, flapVelocity:-600, maxFallSpeed:750, horizontalSpeed:280, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
-  Floaty:      {gravity:1300, flapVelocity:-470, maxFallSpeed:500, horizontalSpeed:240, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
-  Twitchy:     {gravity:5000, flapVelocity:-620, maxFallSpeed:1000, horizontalSpeed:350, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
-  SpecLiteral: {gravity:1620, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
-  Broken:      {gravity:27, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Tuned:       {gravity:4200, flapVelocity:-700, maxFallSpeed:850, horizontalSpeed:290, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Balanced:    {gravity:2600, flapVelocity:-600, maxFallSpeed:750, horizontalSpeed:280, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Floaty:      {gravity:1300, flapVelocity:-470, maxFallSpeed:500, horizontalSpeed:240, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Twitchy:     {gravity:5000, flapVelocity:-620, maxFallSpeed:1000, horizontalSpeed:350, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  SpecLiteral: {gravity:1620, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
+  Broken:      {gravity:27, flapVelocity:-510, maxFallSpeed:600, horizontalSpeed:270, jumpStyle:0, impulseFrames:9, birdRadius:16, spikeWidth:30, spikeHeight:24, spikeAngle:0, spikeCountMin:2, spikeCountMax:5, candyChance:0.5},
 };
 
 let config = { ...PHYSICS_DEFAULTS };
@@ -161,6 +197,19 @@ function initGame() {
   resetState();
 }
 
+function resetEpisode() {
+  bird.x = W/2;
+  bird.y = H/2;
+  bird.vy = 0;
+  bird.vx = config.horizontalSpeed;
+  bird.alive = true;
+  candy = null;
+  particles = [];
+  scoreFlash = 0;
+  gameOverAnim = { birdY: bird.y, alpha: 0, spin: 0 };
+  resetState();
+}
+
 function resetState() {
   bird.vy = 0;
   bird.vx = config.horizontalSpeed;
@@ -169,34 +218,68 @@ function resetState() {
   particles = [];
   scoreFlash = 0;
   gameOverAnim = { birdY: bird.y, alpha: 0, spin: 0 };
-  spawnSpikeWall(WALL_BORDER + 15);
+  spawnSpikeWall(W - WALL_BORDER);
   spawnCandy();
   spawnCapSpikes();
 }
 
 function spawnSpikeWall(x) {
   spikes = [];
-  const count = Math.max(config.spikeCountMin, Math.min(config.spikeCountMax, config.spikeCountMin + Math.floor(Math.random() * 4)));
-  const occupied = new Set();
+  const dir = x < W/2 ? 1 : -1;
+  const forbidden = new Set();
+  forbidden.add(0);
+  forbidden.add(SLOT_COUNT - 1);
+  const clearance = config.spikeWidth / 2 + config.birdRadius + 8;
+  for (let slot = 0; slot < SLOT_COUNT; slot++) {
+    const slotCenter = SLOT_H * slot + SLOT_H / 2;
+    if (Math.abs(bird.y - slotCenter) < clearance) {
+      forbidden.add(slot);
+    }
+  }
+  const allowed = [];
+  for (let slot = 0; slot < SLOT_COUNT; slot++) {
+    if (!forbidden.has(slot)) allowed.push(slot);
+  }
+  let minSpikes, maxSpikes;
+  if (score <= 5) { minSpikes = 2; maxSpikes = 3; }
+  else if (score <= 15) { minSpikes = 3; maxSpikes = 4; }
+  else { minSpikes = 4; maxSpikes = 5; }
+  const effectiveMin = Math.min(minSpikes, config.spikeCountMax);
+  const effectiveMax = Math.max(maxSpikes, config.spikeCountMin);
+  const maxCount = Math.max(effectiveMin, Math.min(effectiveMax, effectiveMin + Math.floor(Math.random() * (effectiveMax - effectiveMin + 1))));
+  const count = Math.min(maxCount, allowed.length);
   for (let i = 0; i < count; i++) {
-    let slot;
-    let attempts = 0;
-    do {
-      slot = Math.floor(Math.random() * SLOT_COUNT);
-      attempts++;
-    } while (occupied.has(slot) && attempts < 50);
-    if (occupied.has(slot)) continue;
-    occupied.add(slot);
-    const dir = x < W/2 ? 1 : -1;
-    spikes.push({ x, y: SLOT_H * slot + SLOT_H/2, dir, width: config.spikeWidth, height: config.spikeHeight, angle: config.spikeAngle });
+    const idx = Math.floor(Math.random() * allowed.length);
+    const slot = allowed.splice(idx, 1)[0];
+    const slotCenter = SLOT_H * slot + SLOT_H / 2;
+    spikes.push({ x, y: slotCenter, dir, width: config.spikeWidth, height: config.spikeHeight, angle: config.spikeAngle });
+  }
+  return allowed;
+}
+
+function findAiTargetBucket() {
+  if (gameMode !== MODE.AI_TRAIN && gameMode !== MODE.AI_PLAY) return;
+  const targetX = bird.vx > 0 ? W - WALL_BORDER : WALL_BORDER;
+  const allowed = [];
+  for (let slot = 0; slot < SLOT_COUNT; slot++) {
+    const slotCenter = SLOT_H * slot + SLOT_H / 2;
+    if (Math.abs(bird.y - slotCenter) < config.spikeWidth / 2 + config.birdRadius + 8) continue;
+    if (slot === 0 || slot === SLOT_COUNT - 1) continue;
+    allowed.push({ slot, dist: Math.abs(bird.y - slotCenter) });
+  }
+  allowed.sort((a, b) => a.dist - b.dist);
+  if (allowed.length > 0) {
+    aiTargetBucket = allowed[0].slot;
   }
 }
 
 function spawnCapSpikes() {
   capSpikes = [];
-  for (let i = 0; i < Math.floor(W / config.spikeWidth); i++) {
-    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: WALL_BORDER + config.spikeHeight, dir: 1, width: config.spikeWidth, height: config.spikeHeight });
-    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: H - WALL_BORDER - config.spikeHeight, dir: -1, width: config.spikeWidth, height: config.spikeHeight });
+  const playableWidth = W - 2 * WALL_BORDER;
+  const count = Math.floor(playableWidth / config.spikeWidth);
+  for (let i = 0; i < count; i++) {
+    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: WALL_BORDER, dir: 1, width: config.spikeWidth, height: config.spikeHeight });
+    capSpikes.push({ x: WALL_BORDER + i * config.spikeWidth + config.spikeWidth/2, y: H - WALL_BORDER, dir: -1, width: config.spikeWidth, height: config.spikeHeight });
   }
 }
 
@@ -205,15 +288,15 @@ function spawnCandy() {
   candy = null;
   if (Math.random() > config.candyChance) return;
   const occupied = new Set();
-  for (const s of spikes) occupied.add(Math.round(s.y / SLOT_H));
-  let slot;
-  let attempts = 0;
-  do {
-    slot = Math.floor(Math.random() * SLOT_COUNT);
-    attempts++;
-  } while (occupied.has(slot) && attempts < 50);
-  if (occupied.has(slot)) return;
-  const cx = spikes.some(s => s.dir === 1) ? WALL_BORDER + 15 : W - WALL_BORDER - 15;
+  for (const s of spikes) occupied.add(Math.floor(s.y / SLOT_H));
+  for (const s of capSpikes) occupied.add(Math.floor(s.y / SLOT_H));
+  const allowed = [];
+  for (let slot = 0; slot < SLOT_COUNT; slot++) {
+    if (!occupied.has(slot)) allowed.push(slot);
+  }
+  if (allowed.length === 0) return;
+  const slot = allowed[Math.floor(Math.random() * allowed.length)];
+  const cx = spikes.some(s => s.dir === 1) ? WALL_BORDER + 40 : W - WALL_BORDER - 40;
   candy = { x: cx, y: SLOT_H * slot + SLOT_H/2, r: 8, collected: false, angle: 0 };
 }
 
@@ -256,7 +339,7 @@ function updatePhysics(dt) {
     scoreFlash = 1;
     shakeScreen();
     bird.vx = Math.abs(bird.vx);
-    spawnSpikeWall(WALL_BORDER + 15);
+    spawnSpikeWall(W - WALL_BORDER);
     spawnCandy();
   } else if (bird.x + config.birdRadius > W - WALL_BORDER) {
     bird.x = W - WALL_BORDER - config.birdRadius;
@@ -264,7 +347,7 @@ function updatePhysics(dt) {
     scoreFlash = 1;
     shakeScreen();
     bird.vx = -Math.abs(bird.vx);
-    spawnSpikeWall(W - WALL_BORDER - 15);
+    spawnSpikeWall(WALL_BORDER);
     spawnCandy();
   }
 
@@ -398,39 +481,6 @@ function draw() {
   ctx.textBaseline = 'middle';
   ctx.fillText(String(score), W/2, H/2);
 
-  // Game over overlay
-  if (!bird || !bird.alive) {
-    gameOverAnim.alpha = Math.min(1, gameOverAnim.alpha + 0.02);
-    ctx.fillStyle = 'rgba(0,0,0,' + (gameOverAnim.alpha * 0.6) + ')';
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 36px Segoe UI';
-    ctx.textAlign = 'center';
-    ctx.fillText('Game Over', W/2, H/2 - 80);
-    ctx.font = '24px Segoe UI';
-    ctx.fillText('Score: ' + score, W/2, H/2 - 30);
-
-    // Animated bird
-    ctx.save();
-    ctx.translate(W/2, gameOverAnim.birdY);
-    ctx.rotate(gameOverAnim.spin);
-    ctx.fillStyle = '#e74c3c';
-    ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Play Again button
-    if (gameOverAnim.alpha >= 0.6) {
-      ctx.fillStyle = '#4fc3f7';
-      ctx.font = '20px Segoe UI';
-      ctx.fillText('Tap to Play Again', W/2, H/2 + 60);
-    }
-    ctx.restore();
-    return;
-  }
-
   // AI decision indicator
   if (gameMode !== MODE.HUMAN && bird.alive) {
     if (aiFlashFrame > 0) {
@@ -440,6 +490,17 @@ function draw() {
       ctx.arc(bird.x, bird.y, config.birdRadius + 8, 0, Math.PI * 2);
       ctx.stroke();
       aiFlashFrame -= 0.05;
+    }
+    if (aiTargetBucket !== null) {
+      const targetY = SLOT_H * aiTargetBucket + SLOT_H / 2;
+      ctx.strokeStyle = 'rgba(76,175,80,0.6)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, targetY);
+      ctx.lineTo(W, targetY);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -488,13 +549,22 @@ function drawCandy() {
   if (!candy || candy.collected) return;
   candy.angle += 0.05;
   const pulse = 1 + Math.sin(candy.angle * 3) * 0.15;
+  const r = candy.r * pulse;
+  ctx.save();
+  ctx.translate(candy.x, candy.y);
+  ctx.rotate(candy.angle);
   ctx.fillStyle = '#ffeb3b';
   ctx.beginPath();
-  ctx.arc(candy.x, candy.y, candy.r * pulse, 0, Math.PI * 2);
+  ctx.moveTo(0, -r);
+  ctx.lineTo(r, 0);
+  ctx.lineTo(0, r);
+  ctx.lineTo(-r, 0);
+  ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = '#f57f17';
   ctx.lineWidth = 2;
   ctx.stroke();
+  ctx.restore();
 }
 
 let aiFlashFrame = 0;
@@ -514,6 +584,26 @@ let aiStatesVisited = new Set();
 let trainedPhysicsHash = null;
 let aiTargetBucket = null;
 let aiLastAction = -1;
+let aiLearning = false;
+
+// RL step inspector variables
+let aiStepEpisode = 0;
+let aiStepStep = 0;
+let aiStepDx = -1, aiStepDy = -1, aiStepVy = -1, aiStepDs = -1, aiStepDir = -1;
+let aiStepStateIdx = -1;
+let aiStepAction = -1;
+let aiStepIsExplore = false;
+let aiStepQ0 = 0, aiStepQ1 = 0;
+let aiStepReward = 0;
+let aiStepTdError = 0;
+
+// Step log ring buffer
+const LOG_MAX = 200;
+let aiLogPaused = false;
+let aiLogBuffer = [];
+let aiLogSeq = 0;
+let lastSaveError = '';
+let aiLogRendered = -1;
 
 const Q_BUCKETS = {
   dxBuckets: 12,
@@ -522,22 +612,22 @@ const Q_BUCKETS = {
   spikeBuckets: [8,24,48,80,128,192,288,480],
 };
 
+const Q_SIZES = [Q_BUCKETS.dxBuckets, 17, 9, 10, 2];
+const Q_NUM_STATES = Q_SIZES.reduce((a, b) => a * b, 1);
+
 function initQTable() {
-  const sizes = [Q_BUCKETS.dxBuckets, 17, 9, 9, 2];
-  const total = sizes.reduce((a,b) => a*b, 1);
-  qTable = new Float32Array(total);
+  const numStates = Q_NUM_STATES;
+  qTable = new Float32Array(numStates * 2);
   aiStatesVisited = new Set();
 }
 
 function mixRadixKey(dx, dy, vy, ds, dir) {
-  const sizes = [Q_BUCKETS.dxBuckets, 17, 9, 9, 2];
+  const sizes = Q_SIZES;
   return dx + dy*sizes[0] + vy*sizes[0]*sizes[1] + ds*sizes[0]*sizes[1]*sizes[2] + dir*sizes[0]*sizes[1]*sizes[2]*sizes[3];
 }
 
 function dxBucket() {
-  const dist = gameMode === MODE.AI_PLAY || gameMode === MODE.AI_TRAIN ?
-    (bird.vx > 0 ? W - WALL_BORDER - 12 - bird.x : bird.x - WALL_BORDER - 12) :
-    (bird.vx > 0 ? W - WALL_BORDER - 12 - bird.x : bird.x - WALL_BORDER - 12);
+  const dist = bird.vx > 0 ? W - WALL_BORDER - config.birdRadius - bird.x : bird.x - WALL_BORDER - config.birdRadius;
   return Math.max(0, Math.min(Q_BUCKETS.dxBuckets - 1, Math.floor(dist / (W - 2*WALL_BORDER) * Q_BUCKETS.dxBuckets)));
 }
 
@@ -587,37 +677,57 @@ function getStateKey() {
   const vy = vyBucket();
   const ds = dySpikeBucket();
   const d = dirBit();
-  aiStatesVisited.add(mixRadixKey(dx, dy, vy, ds, d));
-  return mixRadixKey(dx, dy, vy, ds, d);
+  const key = mixRadixKey(dx, dy, vy, ds, d);
+  aiStatesVisited.add(key);
+  return Math.max(0, Math.min(Q_NUM_STATES - 1, key));
 }
 
 function getBestAction(state) {
-  const base = state;
+  const base = state * 2;
   const a0 = qTable[base];
   const a1 = qTable[base + 1];
   return a1 >= a0 ? 1 : 0;
 }
 
 function chooseAction(state) {
-  if (aiEpsilon > Math.random()) return Math.random() < 0.5 ? 0 : 1;
-  return getBestAction(state);
+  const isExplore = aiEpsilon > Math.random();
+  let action;
+  if (isExplore) {
+    action = Math.random() < 0.5 ? 0 : 1;
+  } else {
+    action = getBestAction(state);
+  }
+  // Record Q values before update
+  const base = state * 2;
+  aiStepQ0 = qTable[base];
+  aiStepQ1 = qTable[base + 1];
+  aiStepIsExplore = isExplore;
+  return action;
 }
 
 function updateQ(state, action, reward, nextState, done) {
+  const stateIdx = state * 2 + action;
+  const oldQ = qTable[stateIdx];
+  let target;
   if (done) {
-    qTable[state + action] += aiAlpha * (reward - qTable[state + action]);
+    target = reward;
   } else {
     const bestNext = getBestAction(nextState);
-    const target = reward + aiGamma * qTable[nextState + bestNext];
-    qTable[state + action] += aiAlpha * (target - qTable[state + action]);
+    target = reward + aiGamma * qTable[nextState * 2 + bestNext];
   }
+  qTable[stateIdx] += aiAlpha * (target - oldQ);
+  // Record TD error
+  aiStepTdError = target - oldQ;
 }
 
 function computeEpsilon() {
-  if (aiEpisode < 1500) {
-    return Math.max(0.02, Math.exp(-aiEpisode / 1500));
+  const EPS_MIN = 0.02;
+  const EPS_EPISODES = 1500;
+  const k = Math.log(1 / EPS_MIN) / EPS_EPISODES;
+  if (aiEpisode < EPS_EPISODES) {
+    return Math.max(EPS_MIN, Math.exp(-k * aiEpisode));
   }
-  return 0.02;
+  return EPS_MIN;
 }
 
 function updateAI() {
@@ -628,7 +738,27 @@ function updateAI() {
   const action = chooseAction(state);
   aiLastAction = action;
 
+  // Action 1 is FLAP: apply it before stepping the physics, exactly as the
+  // human input handlers do, so the agent's two actions actually differ.
+  if (action === 1 && bird.alive) {
+    bird.vy = config.flapVelocity;
+  }
+
+  // Populate step inspector variables
+  aiStepEpisode = aiEpisode;
+  aiStepStep = aiCurrentScore;
+  aiStepDx = dxBucket();
+  aiStepDy = dyBucket();
+  aiStepVy = vyBucket();
+  aiStepDs = dySpikeBucket();
+  aiStepDir = dirBit();
+  aiStepStateIdx = state;
+  aiStepAction = action;
+  aiStepReward = 0.1;
+  aiStepTdError = 0;
+
   updatePhysics(PHYSICS_DT);
+  findAiTargetBucket();
 
   let reward = 0.1;
   let done = false;
@@ -636,10 +766,13 @@ function updateAI() {
   if (!bird.alive) {
     reward = -100;
     done = true;
+    aiStepReward = reward;
   } else if (bird.vx > 0 && bird.x + config.birdRadius > W - WALL_BORDER) {
     reward = 10;
+    aiStepReward = reward;
   } else if (bird.vx < 0 && bird.x - config.birdRadius < WALL_BORDER) {
     reward = 10;
+    aiStepReward = reward;
   }
 
   if (candy && !candy.collected) {
@@ -647,20 +780,27 @@ function updateAI() {
     const dy2 = bird.y - candy.y;
     if (Math.sqrt(dx2*dx2 + dy2*dy2) < config.birdRadius + candy.r) {
       reward += 5;
+      aiStepReward += 5;
     }
   }
 
   const nextState = getStateKey();
-  updateQ(state, action, reward, nextState, done);
+
+  // Only update Q-table in TRAIN mode; PLAY mode is observation-only
+  if (aiLearning) {
+    updateQ(state, action, reward, nextState, done);
+  }
 
   if (done) {
-    aiCurrentScore = 0;
-    aiEpisode++;
     aiScores.push(aiCurrentScore);
     if (aiCurrentScore > aiBestScore) aiBestScore = aiCurrentScore;
+    aiEpisode++;
     aiEpsilon = computeEpsilon();
+    aiCurrentScore = 0;
     aiTargetBucket = null;
     aiLastAction = -1;
+    if (aiEpisode % 50 === 0) saveRunAndReport();
+    resetEpisode();
   } else {
     aiCurrentScore++;
     aiTotalSteps++;
@@ -675,15 +815,144 @@ function resetAI() {
   aiLastAction = -1;
 }
 
-// Save/load Q-table
-function saveQTable() {
+function pushStepLog() {
+  const ep = aiStepEpisode;
+  const step = aiStepStep;
+  const stateIdx = aiStepStateIdx;
+  const action = aiStepAction;
+  const reward = aiStepReward;
+  const td = aiStepTdError;
+
+  let rewardClass = '';
+  if (reward > 0) rewardClass = 'log-reward-pos';
+  else if (reward < -1) rewardClass = 'log-reward-epic';
+  else if (reward < 0) rewardClass = 'log-reward-neg';
+
+  let actionClass = action === 1 ? 'log-action-flap' : 'log-action-noop';
+  let actionLabel = action === 1 ? 'FLAP' : 'NOOP';
+
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = '<span class="' + actionClass + '">' + actionLabel + '</span> ' +
+    'ep:' + ep + ' s:' + step + ' Q0:' + aiStepQ0.toFixed(3) + ' Q1:' + aiStepQ1.toFixed(3) +
+    ' R=' + reward.toFixed(1) + ' ' +
+    '<span class="' + rewardClass + '">TD=' + td.toFixed(3) + '</span>';
+
+  aiLogBuffer.push(line);
+  if (aiLogBuffer.length > LOG_MAX) aiLogBuffer.shift();
+  aiLogSeq++;
+}
+
+function renderStepLog() {
+  if (aiLogPaused) return;
+  const logEl = document.getElementById('rl-log');
+  if (!logEl) return;
+
+  // Only update if there are new steps
+  if (aiLogSeq === aiLogRendered) return;
+  aiLogRendered = aiLogSeq;
+
+  // Append only the newest line, then trim from the front
+  const newest = aiLogBuffer[aiLogBuffer.length - 1];
+  if (newest) logEl.appendChild(newest.cloneNode(true));
+  while (logEl.childElementCount > LOG_MAX) logEl.removeChild(logEl.firstChild);
+
+  // Auto-scroll to bottom
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function renderRLInspector() {
+  const epEl = document.getElementById('rl-ep');
+  const stepEl = document.getElementById('rl-step');
+  const stateEl = document.getElementById('rl-state');
+  const actionEl = document.getElementById('rl-action');
+  const rewardEl = document.getElementById('rl-reward');
+  const tdEl = document.getElementById('rl-td');
+  const q0El = document.getElementById('rl-q0');
+  const q1El = document.getElementById('rl-q1');
+  const modeEl = document.getElementById('rl-mode');
+
+  if (!epEl || !stepEl || !stateEl || !actionEl || !rewardEl || !tdEl || !q0El || !q1El) return;
+
+  if (modeEl) {
+    modeEl.textContent = gameMode === MODE.AI_TRAIN ? 'TRAIN' : 'PLAY';
+  }
+
+  epEl.textContent = aiStepEpisode;
+  stepEl.textContent = aiStepStep;
+  stateEl.textContent = 'dx=' + aiStepDx + ' dy=' + aiStepDy + ' vy=' + aiStepVy + ' ds=' + aiStepDs + ' dir=' + aiStepDir + ' idx=' + aiStepStateIdx;
+
+  let actionHtml = aiStepAction === 1 ? 'FLAP' : 'NOOP';
+  if (aiStepIsExplore) {
+    actionHtml += ' <span class="rl-explore">[EXPLORE]</span>';
+  } else {
+    actionHtml += ' <span class="rl-greedy">[GREEDY]</span>';
+  }
+  actionEl.innerHTML = actionHtml;
+
+  rewardEl.innerHTML = '<span class="rl-reward">' + aiStepReward.toFixed(1) + '</span>';
+  tdEl.innerHTML = '<span class="rl-td">' + aiStepTdError.toFixed(3) + '</span>';
+  q0El.textContent = aiStepQ0.toFixed(3);
+  q1El.textContent = aiStepQ1.toFixed(3);
+}
+
+// Save/load full run
+function saveRun() {
   try {
-    localStorage.setItem('dtts_qtable', JSON.stringify({
+    const run = {
+      version: 2,
       physics: hashConfig(config),
       episode: aiEpisode,
-      data: Array.from(qTable)
-    }));
-  } catch(e) {}
+      totalSteps: aiTotalSteps,
+      bestScore: aiBestScore,
+      scores: aiScores.slice(-5000),
+      alpha: aiAlpha,
+      gamma: aiGamma,
+      qtable: Array.from(qTable)
+    };
+    const str = JSON.stringify(run);
+    localStorage.setItem('dtts_run', str);
+    return str.length;
+  } catch(e) {
+    lastSaveError = String(e && e.message ? e.message : e);
+    return -1;
+  }
+}
+
+function saveRunAndReport() {
+  const n = saveRun();
+  const statusEl = document.getElementById('save-status');
+  if (statusEl) {
+    statusEl.textContent = n > 0
+      ? 'saved ep ' + aiEpisode + ', ' + n + ' chars'
+      : 'SAVE FAILED: ' + lastSaveError;
+  }
+  return n;
+}
+
+function loadRun() {
+  try {
+    const saved = localStorage.getItem('dtts_run');
+    if (!saved) return false;
+    const run = JSON.parse(saved);
+    if (!run || !run.qtable) return false;
+    const expectedSize = Q_NUM_STATES * 2;
+    if (run.qtable.length === expectedSize) {
+      qTable = new Float32Array(run.qtable);
+    } else {
+      initQTable();
+    }
+    trainedPhysicsHash = run.physics || null;
+    aiEpisode = run.episode || 0;
+    aiTotalSteps = run.totalSteps || 0;
+    aiBestScore = run.bestScore || 0;
+    aiScores = run.scores || [];
+    aiAlpha = run.alpha != null ? run.alpha : aiAlpha;
+    aiGamma = run.gamma != null ? run.gamma : aiGamma;
+    return true;
+  } catch(e) {
+    return false;
+  }
 }
 
 function loadQTable() {
@@ -694,7 +963,8 @@ function loadQTable() {
       if (p && p.physics && p.data) {
         trainedPhysicsHash = p.physics;
         aiEpisode = p.episode || 0;
-        if (p.data.length === qTable.length) {
+    const expectedSize = Q_NUM_STATES * 2;
+        if (p.data.length === expectedSize) {
           qTable = new Float32Array(p.data);
         } else {
           initQTable();
@@ -707,7 +977,7 @@ function loadQTable() {
 }
 
 function exportPolicy() {
-  const data = { physics: hashConfig(config), episode: aiEpisode, data: Array.from(qTable) };
+  const data = { version: 2, physics: hashConfig(config), episode: aiEpisode, totalSteps: aiTotalSteps, bestScore: aiBestScore, scores: aiScores.slice(-5000), alpha: aiAlpha, gamma: aiGamma, data: Array.from(qTable) };
   const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -720,11 +990,33 @@ function exportPolicy() {
 function importPolicy(data) {
   try {
     const p = JSON.parse(data);
-    if (p && p.physics && p.data) {
-      trainedPhysicsHash = p.physics;
-      aiEpisode = p.episode || 0;
-      qTable = new Float32Array(p.data);
-      return true;
+    const expectedSize = Q_NUM_STATES * 2;
+    if (p && p.data) {
+      if (p.version === 2) {
+        if (p.data.length === expectedSize) {
+          qTable = new Float32Array(p.data);
+        } else {
+          initQTable();
+        }
+        trainedPhysicsHash = p.physics || null;
+        aiEpisode = p.episode || 0;
+        aiTotalSteps = p.totalSteps || 0;
+        aiBestScore = p.bestScore || 0;
+        aiScores = p.scores || [];
+        aiAlpha = p.alpha != null ? p.alpha : aiAlpha;
+        aiGamma = p.gamma != null ? p.gamma : aiGamma;
+        return true;
+      } else {
+        // old format: { physics, episode, data }
+        trainedPhysicsHash = p.physics;
+        aiEpisode = p.episode || 0;
+        if (p.data.length === expectedSize) {
+          qTable = new Float32Array(p.data);
+        } else {
+          initQTable();
+        }
+        return true;
+      }
     }
   } catch(e) {}
   return false;
@@ -753,7 +1045,7 @@ function updateDerivedValues() {
   el.innerHTML = '';
 
   const rows = [
-    ['Jump height', formatVal(jumpH, 'px', jumpH > 300 ? 'amber' : (jumpH > 960 ? 'red' : 'green'))],
+    ['Jump height', formatVal(jumpH, 'px', jumpH > 960 ? 'red' : (jumpH > 300 ? 'amber' : 'green'))],
     ['Time to apex', formatVal(apexTime, 's')],
     ['H travel/jump', formatVal(hPerJump, 'px')],
     ['Crossing time', formatVal(crossTime, 's')],
@@ -780,6 +1072,7 @@ function buildSliders() {
     ['flapVelocity', 'Flap Vel', -1200, -100, 5],
     ['maxFallSpeed', 'Max Fall', 150, 2000, 10],
     ['horizontalSpeed', 'H-Speed', 60, 900, 5],
+    ['jumpStyle', 'Jump Style', 0, 1, 1],
     ['impulseFrames', 'Impulse Frames', 1, 20, 1],
     ['birdRadius', 'Bird Radius', 6, 40, 1],
     ['spikeWidth', 'Spike Width', 10, 60, 1],
@@ -796,9 +1089,14 @@ function buildSliders() {
     const row = document.createElement('div');
     row.className = 'slider-row';
     row.innerHTML = '<label>' + label + '</label>';
-    row.innerHTML += '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
-    row.innerHTML += '<input type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
-    row.innerHTML += '<span class="val">' + val.toFixed(step < 1 ? 2 : 0) + '</span>';
+    if (key === 'jumpStyle') {
+      row.innerHTML += '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
+      row.innerHTML += '<span class="val">' + (val === 0 ? 'instant' : 'impulse') + '</span>';
+    } else {
+      row.innerHTML += '<input type="range" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
+      row.innerHTML += '<input type="number" min="' + min + '" max="' + max + '" step="' + step + '" value="' + val + '" data-key="' + key + '">';
+      row.innerHTML += '<span class="val">' + val.toFixed(step < 1 ? 2 : 0) + '</span>';
+    }
     el.appendChild(row);
   }
 }
@@ -828,8 +1126,14 @@ function updateSliderDisplays() {
   for (let i = 0; i < sliders.length; i++) {
     const key = sliders[i].dataset.key;
     sliders[i].value = config[key];
-    inputs[i].value = config[key];
-    vals[i].textContent = config[key].toFixed(sliders[i].step < 1 ? 2 : 0);
+    if (key !== 'jumpStyle') {
+      inputs[i].value = config[key];
+    }
+    if (key === 'jumpStyle') {
+      vals[i].textContent = config[key] === 0 ? 'instant' : 'impulse';
+    } else {
+      vals[i].textContent = config[key].toFixed(sliders[i].step < 1 ? 2 : 0);
+    }
   }
 }
 
@@ -837,10 +1141,6 @@ function clampSliders() {
   const min = parseInt(document.querySelector('#sliders input[data-key="spikeCountMin"]').value);
   const max = parseInt(document.querySelector('#sliders input[data-key="spikeCountMax"]').value);
   if (min > max) {
-    document.querySelector('#sliders input[data-key="spikeCountMin"]').value = max;
-    config.spikeCountMin = max;
-  }
-  if (max < min) {
     document.querySelector('#sliders input[data-key="spikeCountMax"]').value = min;
     config.spikeCountMax = min;
   }
@@ -930,6 +1230,8 @@ function switchMode(newMode) {
   gameMode = newMode;
   if (newMode === MODE.AI_TRAIN || newMode === MODE.AI_PLAY) {
     if (!qTable) initQTable();
+    document.getElementById('rl-inspector').style.display = 'none';
+    document.getElementById('rl-log-section').style.display = 'none';
   }
 }
 
@@ -944,8 +1246,30 @@ function gameLoop(timestamp) {
 
   if (gameMode === MODE.HUMAN) {
     if (!bird || !bird.alive) {
+      gameOverAnim.alpha = Math.min(1, gameOverAnim.alpha + 0.02);
+      gameOverAnim.birdY += 600 * PHYSICS_DT;
+      gameOverAnim.spin += 2.0 * PHYSICS_DT;
       if (gameOverAnim.alpha >= 0.6) {
-        // Flap handled by input handler
+        ctx.fillStyle = 'rgba(0,0,0,' + (gameOverAnim.alpha * 0.6) + ')';
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 36px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.fillText('Game Over', W/2, H/2 - 80);
+        ctx.font = '24px Segoe UI';
+        ctx.fillText('Score: ' + score, W/2, H/2 - 30);
+        ctx.save();
+        ctx.translate(W/2, gameOverAnim.birdY);
+        ctx.rotate(gameOverAnim.spin);
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.arc(0, 0, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = '#4fc3f7';
+        ctx.font = '20px Segoe UI';
+        ctx.fillText('Tap to Play Again', W/2, H/2 + 60);
+        return;
       }
     } else {
       updatePhysics(PHYSICS_DT);
@@ -963,25 +1287,55 @@ function gameLoop(timestamp) {
     }
   } else if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
     const turbo = document.getElementById('turbo-check') && document.getElementById('turbo-check').checked;
-    const stepsPerFrame = turbo ? parseInt(document.getElementById('turbo-steps').value) : 1;
-    const logSteps = Math.log2(stepsPerFrame);
-    const actualSteps = Math.floor(2 ** logSteps);
-    for (let s = 0; s < actualSteps; s++) {
+    const stepsPerFrame = turbo ? Math.max(1, Math.round(2 ** Math.log2(parseInt(document.getElementById('turbo-steps').value)))) : 1;
+    for (let s = 0; s < stepsPerFrame; s++) {
       updateAI();
     }
-    if (gameMode === MODE.AI_TRAIN && aiEpisode % 100 === 0) saveQTable();
+    pushStepLog();
   }
 
-  // Animate game over
-  if (!bird || !bird.alive) {
-    gameOverAnim.birdY += 8 * PHYSICS_DT;
-    gameOverAnim.spin += 0.1;
+  // Animate game over overlay (AI modes only, brief) — do NOT return early
+  if (bird && !bird.alive && (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY)) {
+    gameOverAnim.alpha = Math.min(1, gameOverAnim.alpha + 0.02);
+    gameOverAnim.birdY += 600 * PHYSICS_DT;
+    gameOverAnim.spin += 2.0 * PHYSICS_DT;
+    if (gameOverAnim.alpha >= 0.6) {
+      ctx.fillStyle = 'rgba(0,0,0,' + (gameOverAnim.alpha * 0.6) + ')';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 36px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over', W/2, H/2 - 80);
+      ctx.font = '24px Segoe UI';
+      ctx.fillText('Score: ' + aiCurrentScore, W/2, H/2 - 30);
+      ctx.save();
+      ctx.translate(W/2, gameOverAnim.birdY);
+      ctx.rotate(gameOverAnim.spin);
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   draw();
   updateMetrics();
   drawSparkline();
   checkPolicyBanner();
+
+  // Render RL inspector and step log every frame when in AI mode
+  if (gameMode === MODE.AI_TRAIN || gameMode === MODE.AI_PLAY) {
+    if (document.getElementById('rl-inspector')) {
+      document.getElementById('rl-inspector').style.display = 'block';
+    }
+    if (document.getElementById('rl-log-section')) {
+      document.getElementById('rl-log-section').style.display = 'block';
+    }
+    renderRLInspector();
+
+    renderStepLog();
+  }
 }
 
 // Input handlers
@@ -995,9 +1349,9 @@ document.addEventListener('keydown', (e) => {
       }
     }
     if (gameMode === MODE.HUMAN && bird.alive) {
-      if (config.jumpStyle === 'instant') {
+      if (config.jumpStyle === 0) {
         bird.vy = config.flapVelocity;
-      } else if (config.jumpStyle === 'impulse') {
+      } else if (config.jumpStyle === 1) {
         bird.vy = config.flapVelocity;
       }
     }
@@ -1023,9 +1377,9 @@ canvas.addEventListener('click', (e) => {
   }
 
   if (gameMode === MODE.HUMAN) {
-    if (config.jumpStyle === 'instant') {
+    if (config.jumpStyle === 0) {
       bird.vy = config.flapVelocity;
-    } else if (config.jumpStyle === 'impulse') {
+    } else if (config.jumpStyle === 1) {
       bird.vy = config.flapVelocity;
     }
   }
@@ -1044,9 +1398,9 @@ canvas.addEventListener('touchstart', (e) => {
     return;
   }
   if (gameMode === MODE.HUMAN) {
-    if (config.jumpStyle === 'instant') {
+    if (config.jumpStyle === 0) {
       bird.vy = config.flapVelocity;
-    } else if (config.jumpStyle === 'impulse') {
+    } else if (config.jumpStyle === 1) {
       bird.vy = config.flapVelocity;
     }
   }
@@ -1062,12 +1416,18 @@ document.getElementById('sliders').addEventListener('input', (e) => {
   const step = parseFloat(e.target.step);
   config[key] = parseFloat(e.target.value);
   if (e.target.type === 'range') {
-    const inputs = document.querySelectorAll('#sliders input[data-key="' + key + '"]');
-    inputs.forEach(inp => {
-      if (inp !== e.target) inp.value = config[key];
-    });
+    if (key !== 'jumpStyle') {
+      const inputs = document.querySelectorAll('#sliders input[data-key="' + key + '"]');
+      inputs.forEach(inp => {
+        if (inp !== e.target) inp.value = config[key];
+      });
+    }
     const valEl = e.target.parentElement.querySelector('.val');
-    if (valEl) valEl.textContent = config[key].toFixed(step < 1 ? 2 : 0);
+    if (key === 'jumpStyle') {
+      if (valEl) valEl.textContent = config[key] === 0 ? 'instant' : 'impulse';
+    } else if (valEl) {
+      valEl.textContent = config[key].toFixed(step < 1 ? 2 : 0);
+    }
   }
   saveConfig();
   updateDerivedValues();
@@ -1084,6 +1444,11 @@ document.getElementById('reset-btn').addEventListener('click', () => {
 document.getElementById('mode-human').addEventListener('click', () => switchMode(MODE.HUMAN));
 document.getElementById('mode-ai-train').addEventListener('click', () => switchMode(MODE.AI_TRAIN));
 document.getElementById('mode-ai-play').addEventListener('click', () => switchMode(MODE.AI_PLAY));
+
+document.getElementById('start-learn-btn').addEventListener('click', () => {
+  aiLearning = !aiLearning;
+  document.getElementById('start-learn-btn').textContent = aiLearning ? 'Stop Learning' : 'Start Learning';
+});
 
 document.getElementById('ai-epsilon').addEventListener('input', (e) => {
   aiEpsilon = parseFloat(e.target.value);
@@ -1102,6 +1467,16 @@ document.getElementById('ai-gamma').addEventListener('input', (e) => {
 
 document.getElementById('turbo-steps').addEventListener('input', (e) => {
   document.getElementById('turbo-steps-val').textContent = e.target.value;
+});
+
+document.getElementById('rl-pause-log').addEventListener('change', (e) => {
+  aiLogPaused = e.target.checked;
+});
+
+window.addEventListener('beforeunload', () => { saveRunAndReport(); });
+
+document.getElementById('save-run-btn').addEventListener('click', () => {
+  saveRunAndReport();
 });
 
 document.getElementById('export-btn').addEventListener('click', exportPolicy);
@@ -1131,7 +1506,8 @@ document.getElementById('import-btn').addEventListener('click', () => {
 if (!loadConfig()) {
   config = configFromDefaults();
 }
-if (!loadQTable()) {
+if (!loadRun()) {
+  loadQTable();
   initQTable();
 }
 buildSliders();
