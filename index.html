@@ -612,7 +612,16 @@ const Q_BUCKETS = {
   spikeBuckets: [8,24,48,80,128,192,288,480],
 };
 
-const Q_SIZES = [Q_BUCKETS.dxBuckets, 17, 9, 10, 2];
+// Derived, never hardcoded: a signed bucketer over n thresholds yields 2n+1
+// values and an unsigned one yields n+1. Editing a threshold list above now
+// resizes the table correctly instead of silently overflowing it.
+const Q_SIZES = [
+  Q_BUCKETS.dxBuckets,                    // dx, linear, 12
+  2 * Q_BUCKETS.dyBuckets.length + 1,     // dy, signed,   17
+  2 * Q_BUCKETS.vyBuckets.length + 1,     // vy, signed,    9
+  Q_BUCKETS.spikeBuckets.length + 1,      // ds, unsigned,  9
+  2                                       // dir
+];
 const Q_NUM_STATES = Q_SIZES.reduce((a, b) => a * b, 1);
 
 function initQTable() {
@@ -632,30 +641,33 @@ function dxBucket() {
 }
 
 function clampBucket(val, thresholds) {
-  if (val < -480) return 0;
-  if (val > 480) return thresholds.length + 1;
-  for (let i = 0; i < thresholds.length; i++) {
-    if (val < -thresholds[i]) return thresholds.length - i;
-    if (val > thresholds[i]) return thresholds.length + i + 1;
+  const n = thresholds.length;
+  const a = Math.abs(val);
+  let band = n;
+  for (let i = 0; i < n; i++) {
+    if (a <= thresholds[i]) { band = i; break; }
   }
-  return thresholds.length;
+  return val < 0 ? n - band : n + band;
+}
+
+function magnitudeBucket(val, thresholds) {
+  const n = thresholds.length;
+  const a = Math.abs(val);
+  for (let i = 0; i < n; i++) {
+    if (a <= thresholds[i]) return i;
+  }
+  return n;
 }
 
 function dyBucket() {
-  const target = aiTargetBucket || 0;
+  const target = aiTargetBucket ?? 0;
   const targetY = SLOT_H * target + SLOT_H/2;
   const dist = bird.y - targetY;
   return clampBucket(dist, Q_BUCKETS.dyBuckets);
 }
 
 function vyBucket() {
-  const clamped = Math.max(-900, Math.min(900, bird.vy));
-  const absVal = Math.abs(clamped);
-  const thresholds = Q_BUCKETS.vyBuckets;
-  for (let i = 0; i < thresholds.length; i++) {
-    if (absVal <= thresholds[i]) return i;
-  }
-  return thresholds.length;
+  return clampBucket(Math.max(-900, Math.min(900, bird.vy)), Q_BUCKETS.vyBuckets);
 }
 
 function dySpikeBucket() {
@@ -664,7 +676,7 @@ function dySpikeBucket() {
     const dist = Math.abs(bird.y - s.y);
     if (dist < minDist) minDist = dist;
   }
-  return clampBucket(minDist, Q_BUCKETS.spikeBuckets);
+  return magnitudeBucket(minDist, Q_BUCKETS.spikeBuckets);
 }
 
 function dirBit() {
